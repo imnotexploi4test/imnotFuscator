@@ -125,4 +125,7 @@ All rights reserved by imnotexploi4.
  * String encoding adds a slight computational overhead at runtime, though highly optimized.
  * Designed specifically for Roblox Luau environments but maintains standard Lua 5.1+ compatibility.
  * Multiple fallback implementations ensure compatibility across any build environment.
-(AI Generated ReadMe.md)
+
+```text
+AI Generated README.md
+```
