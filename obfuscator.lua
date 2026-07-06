@@ -46,28 +46,91 @@ local function mx(a, b)
   return r
 end
 
+local function rl(v, r)
+  if r == 0 then return v end
+  local result = ((v * (2 ^ r)) % 256) + math.floor(v / (2 ^ (8 - r)))
+  return math.tointeger(result) or result
+end
+
+local function fill(template, subs)
+  local s = template
+  for k, v in pairs(subs) do
+    s = s:gsub("@" .. k .. "@", tostring(v), 1000)
+  end
+  return s
+end
+
+local function shuffle(t)
+  for i = #t, 2, -1 do
+    local j = math.random(1, i)
+    t[i], t[j] = t[j], t[i]
+  end
+  return t
+end
+
+--[[
+  String encryption, v2:
+    enc[i] = rotl( xor(byte[i], key_i), rot )
+    key_i  = (seed + gseed + i*mult) % 256
+
+  - "seed", "mult", "rot" are randomized per-string constants.
+  - "gseed" is NOT a baked literal. It is recomputed at *runtime* from the
+    raw encoded byte table of the very first string this run encrypts (the
+    "master" string). Every other string's key depends on it, so patching
+    any byte of the master table silently corrupts every other decoded
+    string instead of just printing a cosmetic warning.
+  This replaces the previous single static XOR key (trivially brute-forced
+  byte-by-byte) with a positional keystream plus a bit-rotation layer, and
+  gives the existing "integrity" messaging something real to fail against.
+]]
+local gseed_name = nil
+local gseed_value = 0
+
+local MASTER_TPL = [[local @VN@,@GSV@=(function() local @D@={@ENC@};local @O@="";local @GS@=0;for @I1@=1,#@D@ do @GS@=(@GS@*31+@D@[@I1@])%2147483647 end;@GS@=@GS@%256;for @I2@=1,#@D@ do local @BV@=@D@[@I2@];local @UR@=((@BV@*(2^(8-@ROT@)))%256)+math.floor(@BV@/(2^@ROT@));local @KX@=(@SEED@+@I2@*@MULT@)%256;local @RV@=0;local @VV@=1;local @AV@=@UR@;local @KV@=@KX@;for _=1,8 do if @AV@%2~=@KV@%2 then @RV@=@RV@+@VV@ end;@AV@=math.floor(@AV@/2);@KV@=math.floor(@KV@/2);@VV@=@VV@*2 end;@O@=@O@..string.char(@RV@) end;return @O@,@GS@ end)()]]
+
+local NORMAL_TPL = [[local @VN@=(function():string local @D@={@ENC@};local @O@="";for @I2@=1,#@D@ do local @BV@=@D@[@I2@];local @UR@=((@BV@*(2^(8-@ROT@)))%256)+math.floor(@BV@/(2^@ROT@));local @KX@=(@SEED@+@GSVAR@+@I2@*@MULT@)%256;local @RV@=0;local @VV@=1;local @AV@=@UR@;local @KV@=@KX@;for _=1,8 do if @AV@%2~=@KV@%2 then @RV@=@RV@+@VV@ end;@AV@=math.floor(@AV@/2);@KV@=math.floor(@KV@/2);@VV@=@VV@*2 end;@O@=@O@..string.char(@RV@) end;return @O@ end)()]]
+
 local function bs(str)
+  local is_master = (gseed_name == nil)
   local vn = ni()
   local bytes = {}
   for c = 1, #str do
     table.insert(bytes, string.byte(str, c))
   end
-  local key = math.random(20, 220)
+  local seed = math.random(0, 255)
+  local mult = math.random(1, 255)
+  local rot = math.random(1, 7)
+  local offset = is_master and 0 or gseed_value
   local xored = {}
-  for _, b in ipairs(bytes) do
-    table.insert(xored, mx(b, key))
+  for i, b in ipairs(bytes) do
+    local key = (seed + offset + i * mult) % 256
+    table.insert(xored, rl(mx(b, key), rot))
   end
-  local d, o, x, bv, rv, vv, av, kv =
-    ni(), ni(), ni(), ni(), ni(), ni(), ni(), ni()
-  table.insert(
-    bd,
-    string.format(
-      "local %s=(function():string local %s={%s};local %s=\"\";for %s=1,#%s do local %s=%s[%s];local %s=0;local %s=1;local %s=%s;local %s=%d;for _=1,8 do if %s%%2~=%s%%2 then %s=%s+%s end;%s=math.floor(%s/2);%s=math.floor(%s/2);%s=%s*2 end;%s=%s..string.char(%s)end;return %s end)()",
-      vn, d, table.concat(xored, ","), o, x, d, bv, d, x, rv, vv,
-      av, bv, kv, key, av, kv, rv, rv, vv, av, av, kv, kv, vv, vv,
-      o, o, rv, o
-    )
-  )
+
+  if is_master then
+    local gsv = ni()
+    local stmt = fill(MASTER_TPL, {
+      VN = vn, GSV = gsv, D = ni(), ENC = table.concat(xored, ","),
+      O = ni(), GS = gsv, I1 = ni(), I2 = ni(), BV = ni(), UR = ni(),
+      KX = ni(), RV = ni(), VV = ni(), AV = ni(), KV = ni(),
+      ROT = rot, SEED = seed, MULT = mult
+    })
+    table.insert(bd, stmt)
+    gseed_name = gsv
+    gseed_value = 0
+    for _, val in ipairs(xored) do
+      gseed_value = (gseed_value * 31 + val) % 2147483647
+    end
+    gseed_value = gseed_value % 256
+  else
+    local stmt = fill(NORMAL_TPL, {
+      VN = vn, D = ni(), ENC = table.concat(xored, ","),
+      O = ni(), I2 = ni(), BV = ni(), UR = ni(),
+      KX = ni(), RV = ni(), VV = ni(), AV = ni(), KV = ni(),
+      ROT = rot, SEED = seed, MULT = mult, GSVAR = gseed_name
+    })
+    table.insert(bd, stmt)
+  end
   return vn
 end
 
@@ -90,7 +153,8 @@ for _, w in ipairs({
   "sort","concat","find","sub","len","rep","reverse","upper","lower",
   "byte","char","format","match","gmatch","gsub","abs","ceil",
   "floor","max","min","sqrt","random","randomseed","sin","cos","tan",
-  "huge","pi","clamp","lerp","getfenv","setfenv","loadstring","load"
+  "huge","pi","clamp","lerp","getfenv","setfenv","loadstring","load",
+  "dofile","collectgarbage"
 }) do
   reserved[w] = true
 end
@@ -217,7 +281,7 @@ local function gg(count)
   local parts = {}
   for _ = 1, count do
     local v = ni()
-    local r = math.random(1, 5)
+    local r = math.random(1, 8)
     if r == 1 then
       table.insert(parts, "local " .. v .. "=" .. math.random(0, 999999))
     elseif r == 2 then
@@ -230,8 +294,15 @@ local function gg(count)
       table.insert(parts, "local " .. v .. "={" .. table.concat(nums, ",") .. "}")
     elseif r == 4 then
       table.insert(parts, "local " .. v .. "=" .. math.random(0, 255) .. "+" .. math.random(0, 255))
-    else
+    elseif r == 5 then
       table.insert(parts, "local " .. v .. "=(" .. math.random(1, 500) .. "*" .. math.random(1, 500) .. ")-" .. math.random(0, 9999))
+    elseif r == 6 then
+      local sq = math.random(2, 50)
+      table.insert(parts, "if((" .. sq .. "*" .. sq .. ")>=0)then local " .. v .. "=" .. math.random(0, 999) .. " end")
+    elseif r == 7 then
+      table.insert(parts, "local " .. v .. "=#(\"x\"):rep(" .. math.random(1, 20) .. ")")
+    else
+      table.insert(parts, "local " .. v .. "=(function() if math.random()>=0 then return " .. math.random(1, 100) .. " else return " .. math.random(1, 100) .. " end end)()")
     end
   end
   return table.concat(parts, ";")
@@ -251,6 +322,9 @@ end
 local function obfuscate(src)
   ic = 0
   bd = {}
+  gseed_name = nil
+  gseed_value = 0
+
   local code = remove_comments(src)
   local cns, strings = extract_strings(code)
   local renamed = rename_variables(cns)
@@ -280,11 +354,11 @@ local function obfuscate(src)
   local bcco = bs("coroutine")
   local bcfn = bs("function")
   local bcc = bs("C")
-  local tm = bs("LOOL imagine you use the 25ms and 333ms to skid this thing lel")
-  local tm2 = bs("Anti-tamper triggered. This script is protected.")
-  local tm3 = bs("Nice try skid, but this aint gonna work for you lmaooo")
-  local im = bs("Integrity check failed. Script has been modified.")
-  local eem = bs("Script execution error")
+  local tm = bs("LOOL imagine you use the 25ms and Threaded to skid this thing lel")
+  local tm2 = bs("holy skid")
+  local tm3 = bs("nice try skid, but this aint gonna work for you lmaooo")
+  local im = bs("integrity check failed successfully. this script has been modified.")
+  local eem = bs("execute script error")
 
   local ev = ni()
   local fv = ni()
@@ -302,6 +376,8 @@ local function obfuscate(src)
   local a3 = ni()
   local a4 = ni()
   local a5 = ni()
+  local a6 = ni()
+  local a7 = ni()
   local id = ni()
   local ifn = ni()
   local sc = ni()
@@ -311,6 +387,21 @@ local function obfuscate(src)
   local gc = gg(5)
   local bm = minify(ws)
   local all_decls = table.concat(bd, ";")
+
+  local checks = {
+    "local " .. a1 .. '=(function():boolean local imnot_ok:boolean,imnot_t:any=' .. spc .. '(function()return ' .. sty .. '(' .. se .. ')==\"function\"end);if not imnot_ok or not imnot_t then ' .. se .. '(' .. tm .. ')end;return true end)()',
+    "local " .. a2 .. "=(function():boolean local imnot_checks={" .. bce .. "," .. bcp .. "," .. bcts .. "," .. bcty .. "};for imnot_ci=1,#imnot_checks do local imnot_fn:any=" .. ev .. '[imnot_checks[imnot_ci]];if ' .. sty .. '(imnot_fn)~=\"function\"then ' .. se .. "(" .. tm2 .. ")end end;return true end)()",
+    "local " .. a3 .. "=(function():boolean local imnot_dok:boolean,imnot_dlib:any=" .. spc .. "(function()return " .. ev .. "[" .. bcdb .. "]end);if imnot_dok and imnot_dlib then local imnot_ghok:boolean,imnot_gh:any=" .. spc .. "(function()return imnot_dlib[" .. bcgi .. "]end);if imnot_ghok and imnot_gh then local imnot_info:any=(imnot_gh::any)(1);if imnot_info and imnot_info.what==" .. bcc .. " then " .. se .. "(" .. tm3 .. ")end end end;return true end)()",
+    "local " .. a4 .. "=setmetatable(" .. pv .. ",{[" .. bcni .. "]=function()" .. se .. "(" .. tm .. ")end,[" .. bcix .. "]=function(_imnot_self:any,imnot_key:any):any if imnot_key==" .. cv .. " then return true end;return nil end})",
+    "local " .. a5 .. "=(function():boolean local imnot_cok:boolean,imnot_clib:any=" .. spc .. "(function()return " .. ev .. "[" .. bcco .. "]end);if imnot_cok and imnot_clib then local imnot_running:any=imnot_clib.running;if imnot_running then(imnot_running::any)()end end;return true end)()",
+    "local " .. a6 .. "=(function():boolean local imnot_c1ok:boolean,imnot_c1:any=" .. spc .. "(function()return os.clock()end);if not imnot_c1ok or type(imnot_c1)~=\"number\"then return true end;local imnot_acc=0;for imnot_ti=1,200000 do imnot_acc=imnot_acc+imnot_ti end;local imnot_c2ok:boolean,imnot_c2:any=" .. spc .. "(function()return os.clock()end);if imnot_c2ok and type(imnot_c2)==\"number\"then if(imnot_c2-imnot_c1)>0.35 then " .. se .. "(" .. tm3 .. ")end end;return true end)()",
+    "local " .. a7 .. "=(function():boolean local imnot_rwok:boolean,imnot_rwr:any=" .. spc .. "(function()return rawequal(1,1)end);if not imnot_rwok or imnot_rwr~=true then " .. se .. "(" .. tm2 .. ")end;local imnot_rgok:boolean,imnot_rgr:any=" .. spc .. "(function()local imnot_rt={};rawset(imnot_rt,1,1);return rawget(imnot_rt,1)end);if not imnot_rgok or imnot_rgr~=1 then " .. se .. "(" .. tm2 .. ")end;return true end)()"
+  }
+  shuffle(checks)
+  local checks_block = table.concat(checks, ";")
+
+  local check_names = shuffle({ a1, a2, a3, a5, a6, a7 })
+  local sc_cond = "not " .. table.concat(check_names, " or not ")
 
   local raw = {
     all_decls,
@@ -323,18 +414,14 @@ local function obfuscate(src)
     ga,
     "local " .. pv .. "={}",
     "local " .. cv .. "=" .. checksum,
-    "local " .. a1 .. '=(function():boolean local imnot_ok:boolean,imnot_t:any=' .. spc .. '(function()return ' .. sty .. '(' .. se .. ')==\"function\"end);if not imnot_ok or not imnot_t then ' .. se .. '(' .. tm .. ')end;return true end)()',
-    "local " .. a2 .. "=(function():boolean local imnot_checks={" .. bce .. "," .. bcp .. "," .. bcts .. "," .. bcty .. "};for imnot_ci=1,#imnot_checks do local imnot_fn:any=" .. ev .. '[imnot_checks[imnot_ci]];if ' .. sty .. '(imnot_fn)~=\"function\"then ' .. se .. "(" .. tm2 .. ")end end;return true end)()",
-    "local " .. a3 .. "=(function():boolean local imnot_dok:boolean,imnot_dlib:any=" .. spc .. "(function()return " .. ev .. "[" .. bcdb .. "]end);if imnot_dok and imnot_dlib then local imnot_ghok:boolean,imnot_gh:any=" .. spc .. "(function()return imnot_dlib[" .. bcgi .. "]end);if imnot_ghok and imnot_gh then local imnot_info:any=(imnot_gh::any)(1);if imnot_info and imnot_info.what==" .. bcc .. " then " .. se .. "(" .. tm3 .. ")end end end;return true end)()",
-    "local " .. a4 .. "=setmetatable(" .. pv .. ",{[" .. bcni .. "]=function()" .. se .. "(" .. tm .. ")end,[" .. bcix .. "]=function(_imnot_self:any,imnot_key:any):any if imnot_key==" .. cv .. " then return true end;return nil end})",
-    "local " .. a5 .. "=(function():boolean local imnot_cok:boolean,imnot_clib:any=" .. spc .. "(function()return " .. ev .. "[" .. bcco .. "]end);if imnot_cok and imnot_clib then local imnot_running:any=imnot_clib.running;if imnot_running then(imnot_running::any)()end end;return true end)()",
+    checks_block,
     gb,
     "local " .. id .. "=" .. checksum,
     "local " .. ifn .. "=function()if " .. id .. "~=" .. cv .. " then " .. se .. "(" .. im .. ")end end",
     ifn .. "()",
     "local " .. fv .. "=function()" .. ifn .. "();" .. bm .. " end",
     gc,
-    "local " .. sc .. "=(function():boolean if not " .. a1 .. " or not " .. a2 .. " or not " .. a3 .. " or not " .. a5 .. " then " .. se .. "(" .. tm .. ")end;return true end)()",
+    "local " .. sc .. "=(function():boolean if " .. sc_cond .. " then " .. se .. "(" .. tm .. ")end;return true end)()",
     "local " .. sv .. ":boolean," .. erv .. ":any=" .. spc .. "(" .. fv .. ")",
     "if not " .. sv .. " then local imnot_handler:any=" .. sw .. " or " .. sp .. " or function(...)end;(imnot_handler::any)(" .. eem .. ")end"
   }
