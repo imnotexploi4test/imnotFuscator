@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>imnotFuscator Playground</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 15px;
+            margin: 0;
+            background-color: #ffffff;
+            color: #000000;
+        }
+        .controls {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            font-family: monospace;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .container {
+            display: flex;
+            gap: 15px;
+            height: 85vh;
+        }
+        .box {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        textarea {
+            flex: 1;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 13px;
+            border: 1px solid #ccc;
+            resize: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <button id="obfuscateBtn">Obfuscate</button>
+        <button id="clearBtn">Clear</button>
+    </div>
+
+    <div class="container">
+        <!-- Input Panel -->
+        <div class="box">
+            <label for="inputBox"><b>Input Script (Lua):</b></label>
+            <textarea id="inputBox" placeholder="-- Paste your code here..."></textarea>
+        </div>
+
+        <!-- Output Panel -->
+        <div class="box">
+            <label for="outputBox"><b>Status & Output:</b></label>
+            <textarea id="outputBox" readonly placeholder="Obfuscation logs and results will be displayed here..."></textarea>
+        </div>
+    </div>
+
+    <script>
+        const input = document.getElementById('inputBox');
+        const output = document.getElementById('outputBox');
+        const obfuscateBtn = document.getElementById('obfuscateBtn');
+        const clearBtn = document.getElementById('clearBtn');
+
+        let logs = [];
+
+        function addLog(msg) {
+            logs.push(msg);
+            output.value = logs.join('\n');
+        }
+
+        // Helper to load dynamic scripts (for loading Python / Lua runtime environments on-the-fly)
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = () => reject(new Error(`Could not load runtime library from ${src}`));
+                document.head.appendChild(script);
+            });
+        }
+
+        // ----------------------------------------------------
+        // 1. ENGINE RUNNERS
+        // ----------------------------------------------------
+
+        // Run JS File
+        async function runJS(scriptPath, inputCode) {
+            // Force reload script by appending timestamp to bypass browser cache
+            await loadScript(`./${scriptPath}?t=${Date.now()}`);
+            const funcName = scriptPath.includes('validator') ? 'validate' : 'obfuscate';
+            
+            if (typeof window[funcName] === 'function') {
+                return window[funcName](inputCode);
+            }
+            throw new Error(`Global function '${funcName}' not found in ${scriptPath}`);
+        }
+
+        // Run Python File in the browser (via Pyodide)
+        async function runPython(scriptPath, inputCode) {
+            if (!window.loadPyodide) {
+                addLog("  [System] Loading Pyodide engine...");
+                await loadScript("https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js");
+            }
+            if (!window.pyodideInstance) {
+                window.pyodideInstance = await loadPyodide();
+            }
+            const pyodide = window.pyodideInstance;
+            
+            const response = await fetch(`./${scriptPath}?t=${Date.now()}`);
+            if (!response.ok) throw new Error(`Could not load local file ${scriptPath}`);
+            const pyCode = await response.text();
+
+            // Run the script structure
+            await pyodide.runPythonAsync(pyCode);
+            
+            // Call the correct python function
+            pyodide.globals.set("input_code", inputCode);
+            const funcName = scriptPath.includes('validator') ? 'validate' : 'obfuscate';
+            
+            return pyodide.runPython(`${funcName}(input_code)`);
+        }
+
+        // Run Lua File in the browser (via Fengari VM)
+        async function runLua(scriptPath, inputCode) {
+            if (!window.fengari) {
+                addLog("  [System] Loading Fengari Lua engine...");
+                await loadScript("https://cdn.jsdelivr.net/npm/fengari-web@0.1.4/dist/fengari-web.js");
+            }
+            const response = await fetch(`./${scriptPath}?t=${Date.now()}`);
+            if (!response.ok) throw new Error(`Could not load local file ${scriptPath}`);
+            const luaCode = await response.text();
+
+            const lua = window.fengari.lua;
+            const lualib = window.fengari.lualib;
+            const lauxlib = window.fengari.lauxlib;
+
+            const L = lauxlib.luaL_newstate();
+            lualib.luaL_openlibs(L);
+
+            // Execute the script content
+            const status = lauxlib.luaL_dostring(L, lua.to_luastring(luaCode));
+            if (status !== 0) {
+                const err = lua.lua_tostring(L, -1);
+                throw new Error(err ? lua.to_jsstring(err) : "Lua initialization failed");
+            }
+
+            // Call function
+            const funcName = scriptPath.includes('validator') ? 'validate' : 'obfuscate';
+            lua.lua_getglobal(L, funcName);
+            if (!lua.lua_isfunction(L, -1)) {
+                throw new Error(`Lua function '${funcName}' not defined in ${scriptPath}`);
+            }
+
+            lua.lua_pushstring(L, inputCode);
+            const callStatus = lua.lua_pcall(L, 1, 1, 0);
+            if (callStatus !== 0) {
+                const err = lua.lua_tostring(L, -1);
+                throw new Error(err ? lua.to_jsstring(err) : "Lua execution failed");
+            }
+
+            const result = lua.lua_tostring(L, -1);
+            return result ? lua.to_jsstring(result) : "";
+        }
+
+        // ----------------------------------------------------
+        // 2. FALLBACK PIPELINE CONTROLLER
+        // ----------------------------------------------------
+
+        async function executeValidation(inputCode) {
+            // Pipeline sequence: JS -> Python -> Lua
+            const pipeline = [
+                { path: 'validator.js', runner: () => runJS('validator.js', inputCode) },
+                { path: 'validator.py', runner: () => runPython('validator.py', inputCode) },
+                { path: 'validator.lua', runner: () => runLua('validator.lua', inputCode) }
+            ];
+
+            for (const step of pipeline) {
+                addLog(`-> Checking ${step.path}...`);
+                try {
+                    const result = await step.runner();
+                    
+                    // Interpret validation output formats
+                    let isValid = true;
+                    let errorMsg = "Generic validation error.";
+
+                    if (typeof result === 'boolean') {
+                        isValid = result;
+                    } else if (typeof result === 'string') {
+                        if (result.trim().toLowerCase() !== "true" && result.trim() !== "1" && result.trim() !== "") {
+                            isValid = false;
+                            errorMsg = result;
+                        }
+                    } else if (result && typeof result === 'object') {
+                        isValid = result.isValid !== false;
+                        errorMsg = result.error || errorMsg;
+                    }
+
+                    if (isValid) {
+                        addLog(`   [SUCCESS] Validation passed using ${step.path}\n`);
+                        return true;
+                    } else {
+                        // The file worked, but code is genuinely invalid! Stop pipeline entirely.
+                        throw new Error(`[Code Syntax Invalid] ${errorMsg}`);
+                    }
+                } catch (err) {
+                    if (err.message.includes("[Code Syntax Invalid]")) {
+                        throw err; // Re-throw real syntax invalidations
+                    }
+                    addLog(`   [FAILED] File issue with ${step.path}: ${err.message}`);
+                }
+            }
+            throw new Error("All validator scripts failed to load or run.");
+        }
+
+        async function executeObfuscation(inputCode) {
+            // Pipeline sequence: JS -> Python -> Lua
+            const pipeline = [
+                { path: 'obfuscator.js', runner: () => runJS('obfuscator.js', inputCode) },
+                { path: 'obfuscator.py', runner: () => runPython('obfuscator.py', inputCode) },
+                { path: 'obfuscator.lua', runner: () => runLua('obfuscator.lua', inputCode) }
+            ];
+
+            for (const step of pipeline) {
+                addLog(`-> Loading ${step.path}...`);
+                try {
+                    const result = await step.runner();
+                    if (result) {
+                        addLog(`   [SUCCESS] Obfuscation succeeded using ${step.path}\n`);
+                        return result;
+                    }
+                    throw new Error("Returned empty result.");
+                } catch (err) {
+                    addLog(`   [FAILED] File issue with ${step.path}: ${err.message}`);
+                }
+            }
+            throw new Error("All obfuscator scripts failed to load or run.");
+        }
+
+        // UI Event Handlers
+        clearBtn.addEventListener('click', () => {
+            input.value = '';
+            output.value = '';
+            logs = [];
+        });
+
+        obfuscateBtn.addEventListener('click', async () => {
+            const code = input.value.trim();
+            if (!code) {
+                output.value = "Error: Input is empty.";
+                return;
+            }
+
+            obfuscateBtn.disabled = true;
+            logs = ["[Pipeline Start]"];
+            addLog("Initializing Validation Stage...");
+
+            try {
+                // Step 1: Validate input script
+                await executeValidation(code);
+
+                // Step 2: Obfuscate validated script
+                addLog("Initializing Obfuscation Stage...");
+                const obfuscatedResult = await executeObfuscation(code);
+
+                // Step 3: Display output
+                logs.push("--- OBFUSCATED SCRIPT OUTPUT ---");
+                logs.push(obfuscatedResult);
+                output.value = logs.join('\n');
+
+            } catch (globalErr) {
+                addLog(`\n[FATAL SYSTEM ERROR] ${globalErr.message}`);
+            } finally {
+                obfuscateBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
