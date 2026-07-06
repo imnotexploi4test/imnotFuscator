@@ -24,7 +24,7 @@ imnotFuscator is a comprehensive obfuscation toolkit for Lua code, featuring imp
 | obfuscator.lua | Lua implementation of obfuscator | Lua |
 | validator.js | JavaScript Lua syntax validator | JavaScript |
 | validator.py | Python Lua syntax validator | Python |
-| validate.lua | Lua syntax validator | Lua |
+| validator.lua | Lua syntax validator | Lua |
 ## Usage
 ### JavaScript
 #### Obfuscation
