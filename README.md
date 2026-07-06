@@ -62,7 +62,7 @@ lua obfuscator.lua input.lua output.lua
 ```
 #### Validation
 ```bash
-lua validate.lua script.lua
+lua validator.lua script.lua
 
 ```
 ## Obfuscation Process
