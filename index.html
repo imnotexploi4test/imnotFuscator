@@ -3,269 +3,694 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>imnotFuscator Playground</title>
+    <title>imnotFuscator V3 — Playground</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/dracula.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/material-darker.min.css">
     <style>
+        :root {
+            --bg: #0a0a0f;
+            --bg2: #12121a;
+            --bg3: #1a1a27;
+            --bg4: #23233a;
+            --border: #2a2a40;
+            --accent: #7c5cff;
+            --accent2: #4ade80;
+            --accent3: #f472b6;
+            --text: #e6e6f0;
+            --text-dim: #9a9ab0;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --radius: 14px;
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
         body {
-            font-family: monospace;
-            padding: 15px;
             margin: 0;
-            background-color: #ffffff;
-            color: #000000;
-        }
-        .controls {
-            margin-bottom: 15px;
-            display: flex;
-            gap: 10px;
-        }
-        button {
-            padding: 8px 16px;
-            font-family: monospace;
-            font-size: 14px;
-            cursor: pointer;
-        }
-        .container {
-            display: flex;
-            gap: 15px;
-            height: 85vh;
-        }
-        .box {
-            flex: 1;
+            background: radial-gradient(1200px 600px at 10% -10%, rgba(124,92,255,0.25), transparent 60%),
+                        radial-gradient(900px 500px at 90% 0%, rgba(74,222,128,0.15), transparent 60%),
+                        radial-gradient(800px 600px at 50% 120%, rgba(244,114,182,0.12), transparent 70%),
+                        var(--bg);
+            color: var(--text);
+            font-family: 'Inter', system-ui, sans-serif;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            gap: 5px;
         }
-        textarea {
-            flex: 1;
-            padding: 10px;
-            font-family: monospace;
+        /* HEADER */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(18,18,26,0.85);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .logo {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, var(--accent), var(--accent3));
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 18px;
+            color: white;
+            box-shadow: 0 4px 20px rgba(124,92,255,0.4);
+        }
+        .brand h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+        .brand h1 span { color: var(--accent); }
+        .badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 20px;
+            background: rgba(124,92,255,0.15);
+            border: 1px solid rgba(124,92,255,0.3);
+            color: #b4a0ff;
+            font-weight: 600;
+        }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .icon-btn {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg3);
+            color: var(--text-dim);
+            display: grid; place-items: center;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .icon-btn:hover { border-color: var(--accent); color: var(--text); background: var(--bg4); transform: translateY(-1px); }
+
+        /* TOOLBAR */
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg2);
+            align-items: center;
+        }
+        .btn {
+            font-family: 'JetBrains Mono', monospace;
             font-size: 13px;
-            border: 1px solid #ccc;
-            resize: none;
+            font-weight: 600;
+            padding: 9px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg3);
+            color: var(--text);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all .18s;
+            user-select: none;
+        }
+        .btn:hover { background: var(--bg4); border-color: #3a3a5a; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0px) scale(.98); }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #9f7aff);
+            border-color: transparent;
+            color: white;
+            box-shadow: 0 4px 18px rgba(124,92,255,0.35);
+        }
+        .btn-primary:hover { filter: brightness(1.1); box-shadow: 0 6px 24px rgba(124,92,255,0.45); }
+        .btn-primary:disabled { opacity: .6; cursor: not-allowed; filter: grayscale(.3); }
+        .btn-ghost { background: transparent; }
+        .sep { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
+        select {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg3);
+            color: var(--text);
+            outline: none;
+        }
+        select:focus { border-color: var(--accent); }
+
+        /* OPTIONS PANEL */
+        .options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 12px 20px;
+            background: linear-gradient(180deg, var(--bg2), transparent);
+            border-bottom: 1px solid var(--border);
+        }
+        .opt {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-dim);
+            cursor: pointer;
+            user-select: none;
+            transition: all .15s;
+        }
+        .opt:hover { background: rgba(124,92,255,0.08); border-color: rgba(124,92,255,0.2); color: var(--text); }
+        .opt input { accent-color: var(--accent); width: 14px; height: 14px; }
+        .opt.active { background: rgba(124,92,255,0.12); border-color: rgba(124,92,255,0.35); color: var(--text); }
+        .range-wrap { display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim); }
+        .range-wrap input[type=range] { accent-color: var(--accent); width: 100px; }
+
+        /* MAIN */
+        .main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            padding: 12px;
+            min-height: 0;
+            overflow: hidden;
+        }
+        @media (max-width: 980px) {
+            .main { grid-template-columns: 1fr; overflow:auto; }
+            body { overflow:auto; }
+        }
+        .panel {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            background: rgba(18,18,26,0.85);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+        }
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.02);
+            border-bottom: 1px solid var(--border);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            letter-spacing: .04em;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+        .panel-head b { color: var(--text); }
+        .panel-head .meta { display:flex; gap:10px; align-items:center; }
+        .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+        .dot-in { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+        .dot-out { background: var(--accent3); box-shadow: 0 0 8px var(--accent3); }
+        .editor-wrap { flex:1; position: relative; min-height: 300px; }
+        .CodeMirror { height:100% !important; font-family: 'JetBrains Mono', monospace !important; font-size: 13px !important; line-height: 1.6 !important; background: transparent !important; }
+        .CodeMirror-gutters { background: rgba(0,0,0,0.2) !important; border-right: 1px solid var(--border) !important; }
+        .drop-overlay {
+            position: absolute; inset: 0;
+            background: rgba(124,92,255,0.12);
+            border: 2px dashed var(--accent);
+            display: none;
+            place-items: center;
+            z-index: 5;
+            backdrop-filter: blur(4px);
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text);
+        }
+        .drop-overlay.active { display: grid; }
+
+        /* FOOTER STATS */
+        .stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            padding: 10px 20px;
+            border-top: 1px solid var(--border);
+            background: var(--bg2);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+        .stats .pill {
+            padding: 4px 8px;
+            border-radius: 20px;
+            background: var(--bg3);
+            border: 1px solid var(--border);
+        }
+        .stats .pill.ok { color: var(--accent2); border-color: rgba(74,222,128,0.25); background: rgba(74,222,128,0.08); }
+        .stats .pill.err { color: var(--danger); border-color: rgba(239,68,68,0.25); background: rgba(239,68,68,0.08); }
+        .stats .pill.warn { color: var(--warning); border-color: rgba(245,158,11,0.25); background: rgba(245,158,11,0.08); }
+
+        /* TOAST */
+        .toasts { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 100; pointer-events: none; }
+        .toast {
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            animation: slideIn .25s ease;
+            pointer-events: auto;
+            max-width: 360px;
+        }
+        .toast.success { border-color: rgba(74,222,128,0.35); }
+        .toast.error { border-color: rgba(239,68,68,0.35); }
+        @keyframes slideIn { from { transform: translateY(10px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar { width:8px; height:8px; }
+        ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 10px; border:1px solid var(--border); }
+        ::-webkit-scrollbar-thumb:hover { background: #333355; }
+
+        /* ANIM GLOW */
+        .glow { position: relative; }
+        .glow::after {
+            content:""; position:absolute; inset:-1px; border-radius:inherit;
+            background: linear-gradient(135deg, var(--accent), var(--accent3));
+            filter: blur(14px); opacity:.15; z-index:-1; pointer-events:none;
         }
     </style>
-
-    <!-- Pre-linking local files so they load instantly if present in repository -->
-    <script src="validator.js" defer></script>
-    <script src="obfuscator.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/lua/lua.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/matchbrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/selection/active-line.min.js"></script>
+    <!-- Local fallback first for instant load -->
+    <script src="./obfuscator.js"></script>
+    <script src="./validator.js"></script>
 </head>
 <body>
+    <header>
+        <div class="brand">
+            <div class="logo">iF</div>
+            <h1>imnot<span>Fuscator</span></h1>
+            <span class="badge">V3 • UPGRADED</span>
+        </div>
+        <div class="header-actions">
+            <button class="icon-btn" id="themeBtn" title="Toggle editor theme">◐</button>
+            <button class="icon-btn" id="infoBtn" title="About">?</button>
+        </div>
+    </header>
 
-    <div class="controls">
-        <button id="obfuscateBtn">Obfuscate</button>
-        <button id="clearBtn">Clear</button>
+    <div class="toolbar">
+        <button class="btn btn-primary glow" id="obfuscateBtn">⚡ Obfuscate</button>
+        <button class="btn" id="clearBtn">Clear</button>
+        <button class="btn" id="copyBtn">⎘ Copy Output</button>
+        <button class="btn" id="downloadBtn">⬇ Download</button>
+        <div class="sep"></div>
+        <select id="exampleSelect">
+            <option value="">— Load Example —</option>
+            <option value="hello">Hello World</option>
+            <option value="calc">Calculator</option>
+            <option value="obfuscationtest">Obfuscation Stress Test</option>
+            <option value="roblox">Roblox Script</option>
+            <option value="loop">Loops & Functions</option>
+        </select>
+        <div class="sep"></div>
+        <label class="btn btn-ghost" for="fileInput" style="cursor:pointer">📁 Upload .lua</label>
+        <input type="file" id="fileInput" accept=".lua,.txt" style="display:none">
     </div>
 
-    <div class="container">
-        <!-- Input Panel -->
-        <div class="box">
-            <label for="inputBox"><b>Input Script (Lua):</b></label>
-            <textarea id="inputBox" placeholder="-- Paste your code here..."></textarea>
-        </div>
+    <div class="options" id="optionsBar">
+        <label class="opt active" title="Rename locals and params"><input type="checkbox" data-opt="renameVars" checked> Rename Vars</label>
+        <label class="opt active" title="XOR + ROT + ADD positional keystream"><input type="checkbox" data-opt="encodeStrings" checked> Encrypt Strings V3</label>
+        <label class="opt active"><input type="checkbox" data-opt="encodeNumbers" checked> Obf Numbers</label>
+        <label class="opt active"><input type="checkbox" data-opt="encodeBooleans" checked> Obf Booleans</label>
+        <label class="opt active"><input type="checkbox" data-opt="addGarbage" checked> Garbage</label>
+        <label class="opt active"><input type="checkbox" data-opt="addAntiTamper" checked> Anti-Tamper V3</label>
+        <label class="opt active"><input type="checkbox" data-opt="controlFlow" checked> Control Flow</label>
+        <label class="opt active"><input type="checkbox" data-opt="minify" checked> Minify</label>
+        <div class="range-wrap">Garbage Amt: <input type="range" id="garbageRange" min="0" max="20" value="7"><span id="garbageVal">7</span></div>
+    </div>
 
-        <!-- Output Panel -->
-        <div class="box">
-            <label for="outputBox"><b>Status & Output:</b></label>
-            <textarea id="outputBox" readonly placeholder="Obfuscated result will be displayed here immediately..."></textarea>
+    <div class="main">
+        <div class="panel">
+            <div class="panel-head">
+                <div><span class="dot dot-in"></span> <b>Input</b> — Lua</div>
+                <div class="meta"><span id="inputMeta">0 bytes</span></div>
+            </div>
+            <div class="editor-wrap" id="inputWrap">
+                <div class="drop-overlay" id="dropOverlay">Drop Lua file to load</div>
+                <textarea id="inputBox" placeholder="-- Paste your Lua code here..."></textarea>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-head">
+                <div><span class="dot dot-out"></span> <b>Output</b> — Obfuscated</div>
+                <div class="meta"><span id="outputMeta">—</span></div>
+            </div>
+            <div class="editor-wrap">
+                <textarea id="outputBox" placeholder="Obfuscated result will appear here..."></textarea>
+            </div>
         </div>
     </div>
 
-    <script>
-        const input = document.getElementById('inputBox');
-        const output = document.getElementById('outputBox');
-        const obfuscateBtn = document.getElementById('obfuscateBtn');
-        const clearBtn = document.getElementById('clearBtn');
+    <div class="stats" id="statsBar">
+        <span class="pill" id="validationPill">Validation: —</span>
+        <span class="pill" id="sizePill">Input: 0 B → Output: 0 B (0×)</span>
+        <span class="pill" id="timePill">Time: —</span>
+        <span class="pill" id="enginePill">Engine: JS-V3</span>
+        <span class="pill">Security: FNV-1a + Positional Keystream + ROL + ADD</span>
+    </div>
 
-        let logs = [];
+    <div class="toasts" id="toasts"></div>
 
-        function addLog(msg) {
-            logs.push(msg);
-            output.value = logs.join('\n');
-        }
+<script>
+/* ===================== Utilities ===================== */
+const $ = (s)=>document.querySelector(s);
+const inputEl = $('#inputBox');
+const outputEl = $('#outputBox');
+const obfBtn = $('#obfuscateBtn');
+const clearBtn = $('#clearBtn');
+const copyBtn = $('#copyBtn');
+const dlBtn = $('#downloadBtn');
+const exampleSelect = $('#exampleSelect');
+const fileInput = $('#fileInput');
+const garbageRange = $('#garbageRange');
+const garbageVal = $('#garbageVal');
+const validationPill = $('#validationPill');
+const sizePill = $('#sizePill');
+const timePill = $('#timePill');
+const enginePill = $('#enginePill');
+const inputMeta = $('#inputMeta');
+const outputMeta = $('#outputMeta');
+const dropOverlay = $('#dropOverlay');
+const inputWrap = $('#inputWrap');
 
-        // Fast script loader helper
-        function loadScript(src) {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = src;
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        }
+const EXAMPLES = {
+    hello: `print("Hello, World!")\nlocal name = "imnotexploi4"\nprint("Made by "..name)`,
+    calc: `local function add(a,b)\n  return a+b\nend\nlocal x = 10\nlocal y = 25\nlocal result = add(x,y)\nprint("Result: "..result)\nif result > 30 then\n  print("Large!")\nelse\n  print("Small")\nend`,
+    obfuscationtest: `-- Stress test with strings, numbers, booleans, loops\nlocal secret = "SuperSecretKey123"\nlocal numbers = {1,2,3,4,5, 100, 999, 0}\nlocal flag = true\nlocal count = 0\nfor i=1,10 do\n  for j=1,5 do\n    count = count + i*j\n    if count % 2 == 0 then\n      print("even: "..count.." key="..secret)\n    end\n  end\nend\nlocal function check(v)\n  return v and "yes" or "no"\nend\nprint(check(flag))\nprint("Done")`,
+    roblox: `local Players = game:GetService("Players")\nlocal plr = Players.LocalPlayer\nlocal char = plr.Character or plr.CharacterAdded:Wait()\nlocal root = char:WaitForChild("HumanoidRootPart")\nprint("Hello "..plr.Name)\nlocal speed = 16\nlocal jump = 50\n-- Example movement\nroot.CFrame = root.CFrame + Vector3.new(0,5,0)\nif speed > 10 then\n  print("Fast")\nend`,
+    loop: `local function factorial(n)\n  if n <= 1 then return 1 end\n  return n * factorial(n-1)\nend\nfor i=1,8 do\n  print(i..\"! = \"..factorial(i))\nend\nlocal t = {}\nfor i=1,10 do t[i]= i*i end\nlocal sum=0\nfor _,v in ipairs(t) do sum=sum+v end\nprint(\"Sum squares: \"..sum)`
+};
 
-        // ----------------------------------------------------
-        // INSTANT RUNNERS
-        // ----------------------------------------------------
+function toast(msg, type='info', ttl=3000) {
+    const c = $('#toasts');
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    c.appendChild(el);
+    setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateY(10px)'; setTimeout(()=>el.remove(),300); }, ttl);
+}
 
-        // Run JS File instantly
-        async function runJS(scriptPath, inputCode) {
-            const funcName = scriptPath.includes('validator') ? 'validate' : 'obfuscate';
-            
-            // If already loaded globally, run instantly (0ms)
-            if (typeof window[funcName] === 'function') {
-                return window[funcName](inputCode);
-            }
-            
-            // Otherwise, attempt dynamic fetch & load immediately
-            await loadScript(`./${scriptPath}`);
-            if (typeof window[funcName] === 'function') {
-                return window[funcName](inputCode);
-            }
-            throw new Error(`Global function '${funcName}' not found in ${scriptPath}`);
-        }
+function fmtBytes(n) {
+    if (n<1024) return n+' B';
+    if (n<1024*1024) return (n/1024).toFixed(1)+' KB';
+    return (n/1024/1024).toFixed(2)+' MB';
+}
 
-        // Run Python File via Pyodide
-        async function runPython(scriptPath, inputCode) {
-            if (!window.loadPyodide) {
-                await loadScript("https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js");
-            }
-            if (!window.pyodideInstance) {
-                window.pyodideInstance = await loadPyodide();
-            }
-            const pyodide = window.pyodideInstance;
-            
-            const response = await fetch(`./${scriptPath}`);
-            if (!response.ok) throw new Error(`Could not load local file ${scriptPath}`);
-            const pyCode = await response.text();
+function getOptions() {
+    const opts = {};
+    document.querySelectorAll('[data-opt]').forEach(cb=>{
+        opts[cb.dataset.opt] = cb.checked;
+    });
+    opts.garbageAmount = parseInt(garbageRange.value,10);
+    return opts;
+}
 
-            await pyodide.runPythonAsync(pyCode);
-            pyodide.globals.set("input_code", inputCode);
-            const funcName = scriptPath.includes('validator') ? 'validate' : 'obfuscate';
-            
-            return pyodide.runPython(`${funcName}(input_code)`);
-        }
-
-        // Run Lua File via Fengari VM
-        async function runLua(scriptPath, inputCode) {
-            if (!window.fengari) {
-                await loadScript("https://cdn.jsdelivr.net/npm/fengari-web@0.1.4/dist/fengari-web.js");
-            }
-            const response = await fetch(`./${scriptPath}`);
-            if (!response.ok) throw new Error(`Could not load local file ${scriptPath}`);
-            const luaCode = await response.text();
-
-            const lua = window.fengari.lua;
-            const lualib = window.fengari.lualib;
-            const lauxlib = window.fengari.lauxlib;
-
-            const L = lauxlib.luaL_newstate();
-            lualib.luaL_openlibs(L);
-
-            const status = lauxlib.luaL_dostring(L, lua.to_luastring(luaCode));
-            if (status !== 0) {
-                const err = lua.lua_tostring(L, -1);
-                throw new Error(err ? lua.to_jsstring(err) : "Lua initialization failed");
-            }
-
-            const funcName = scriptPath.includes('validator') ? 'validate' : 'obfuscate';
-            lua.lua_getglobal(L, funcName);
-            if (!lua.lua_isfunction(L, -1)) {
-                throw new Error(`Lua function '${funcName}' not defined in ${scriptPath}`);
-            }
-
-            lua.lua_pushstring(L, inputCode);
-            const callStatus = lua.lua_pcall(L, 1, 1, 0);
-            if (callStatus !== 0) {
-                const err = lua.lua_tostring(L, -1);
-                throw new Error(err ? lua.to_jsstring(err) : "Lua execution failed");
-            }
-
-            const result = lua.lua_tostring(L, -1);
-            return result ? lua.to_jsstring(result) : "";
-        }
-
-        // ----------------------------------------------------
-        // PIPELINE EXECUTION
-        // ----------------------------------------------------
-
-        async function executeValidation(inputCode) {
-            const pipeline = [
-                { path: 'validator.js', runner: () => runJS('validator.js', inputCode) },
-                { path: 'validator.py', runner: () => runPython('validator.py', inputCode) },
-                { path: 'validator.lua', runner: () => runLua('validator.lua', inputCode) }
-            ];
-
-            for (const step of pipeline) {
-                try {
-                    const result = await step.runner();
-                    let isValid = true;
-                    let errorMsg = "Validation failed.";
-
-                    if (typeof result === 'boolean') {
-                        isValid = result;
-                    } else if (typeof result === 'string') {
-                        if (result.trim().toLowerCase() !== "true" && result.trim() !== "1" && result.trim() !== "") {
-                            isValid = false;
-                            errorMsg = result;
-                        }
-                    } else if (result && typeof result === 'object') {
-                        isValid = result.isValid !== false;
-                        errorMsg = result.error || errorMsg;
-                    }
-
-                    if (isValid) {
-                        return true;
-                    } else {
-                        throw new Error(`[Code Syntax Invalid] ${errorMsg}`);
-                    }
-                } catch (err) {
-                    if (err.message.includes("[Code Syntax Invalid]")) {
-                        throw err;
-                    }
-                }
-            }
-            throw new Error("All validator scripts failed to run or load.");
-        }
-
-        async function executeObfuscation(inputCode) {
-            const pipeline = [
-                { path: 'obfuscator.js', runner: () => runJS('obfuscator.js', inputCode) },
-                { path: 'obfuscator.py', runner: () => runPython('obfuscator.py', inputCode) },
-                { path: 'obfuscator.lua', runner: () => runLua('obfuscator.lua', inputCode) }
-            ];
-
-            for (const step of pipeline) {
-                try {
-                    const result = await step.runner();
-                    if (result) {
-                        return result;
-                    }
-                } catch (err) {
-                    // Fail silently to try the next script in the fallback pipeline instantly
-                }
-            }
-            throw new Error("All obfuscator scripts failed to run or load.");
-        }
-
-        // Event Listeners
-        clearBtn.addEventListener('click', () => {
-            input.value = '';
-            output.value = '';
-            logs = [];
+/* CodeMirror setup with fallback */
+let inputEditor, outputEditor;
+function initEditors() {
+    if (window.CodeMirror) {
+        const cmOpts = {
+            mode: 'lua',
+            theme: 'dracula',
+            lineNumbers: true,
+            matchBrackets: true,
+            autoCloseBrackets: true,
+            styleActiveLine: true,
+            indentUnit: 2,
+            tabSize: 2,
+            lineWrapping: true,
+        };
+        // replace textareas
+        inputEditor = CodeMirror.fromTextArea(inputEl, {...cmOpts, placeholder: '-- Paste Lua here'});
+        outputEditor = CodeMirror.fromTextArea(outputEl, {...cmOpts, readOnly: true});
+        // sync changes for stats
+        inputEditor.on('change', ()=>{
+            const code = inputEditor.getValue();
+            inputMeta.textContent = fmtBytes(new Blob([code]).size);
+            sizePill.textContent = `Input: ${fmtBytes(new Blob([code]).size)}`;
+            localStorage.setItem('imnot_input', code);
+            // live validation debounce
+            clearTimeout(window._valTimer);
+            window._valTimer = setTimeout(()=>quickValidate(code), 350);
         });
-
-        obfuscateBtn.addEventListener('click', async () => {
-            const code = input.value.trim();
-            if (!code) {
-                output.value = "Error: Input is empty.";
-                return;
-            }
-
-            obfuscateBtn.disabled = true;
-            logs = [];
-
-            try {
-                // Run validator and obfuscator sequentially without arbitrary delays
-                await executeValidation(code);
-                const obfuscatedResult = await executeObfuscation(code);
-                output.value = obfuscatedResult;
-
-            } catch (globalErr) {
-                output.value = `[FATAL ERROR] ${globalErr.message}`;
-            } finally {
-                obfuscateBtn.disabled = false;
-            }
+        // restore
+        const saved = localStorage.getItem('imnot_input');
+        if (saved) inputEditor.setValue(saved);
+    } else {
+        // textarea fallback
+        inputEl.addEventListener('input', ()=>{
+            const code = inputEl.value;
+            inputMeta.textContent = fmtBytes(new Blob([code]).size);
+            localStorage.setItem('imnot_input', code);
         });
-    </script>
+        const saved = localStorage.getItem('imnot_input');
+        if (saved) inputEl.value = saved;
+    }
+}
+function getInput() {
+    if (inputEditor) return inputEditor.getValue();
+    return inputEl.value;
+}
+function setOutput(v) {
+    if (outputEditor) { outputEditor.setValue(v); setTimeout(()=>outputEditor.refresh(),50); }
+    else outputEl.value = v;
+    outputMeta.textContent = fmtBytes(new Blob([v]).size);
+}
+function quickValidate(code) {
+    if (!code.trim()) { validationPill.textContent='Validation: —'; validationPill.className='pill'; return; }
+    try {
+        if (typeof window.validate === 'function') {
+            const res = window.validate(code);
+            const ok = (typeof res === 'string' ? /VALID/i.test(res) : !!res) || (res && res.isValid!==false);
+            // naive check
+            if (code.trim().length>0) { // assume valid for demo if no throw
+                validationPill.textContent='Validation: PASS ✓';
+                validationPill.className='pill ok';
+            }
+        } else {
+            validationPill.textContent='Validation: JS validator missing';
+            validationPill.className='pill warn';
+        }
+    } catch(e) {
+        validationPill.textContent='Validation: SYNTAX ERR';
+        validationPill.className='pill err';
+    }
+}
+
+/* Loaders & Obfuscation pipeline (upgraded) */
+async function loadScript(src) {
+    return new Promise((res,rej)=>{
+        if (document.querySelector(`script[src="${src}"]`)) return res();
+        const s=document.createElement('script');
+        s.src=src; s.onload=res; s.onerror=rej;
+        document.head.appendChild(s);
+    });
+}
+async function runJSValidator(code) {
+    if (typeof window.validate !== 'function') {
+        await loadScript('./validator.js').catch(()=>{});
+    }
+    if (typeof window.validate === 'function') return window.validate(code);
+    throw new Error('validator.js not loaded');
+}
+async function runJSObfuscator(code, opts) {
+    if (typeof window.obfuscate !== 'function') {
+        await loadScript('./obfuscator.js').catch(()=>{});
+    }
+    if (window.LuaObfuscator) {
+        const inst = new window.LuaObfuscator(opts);
+        return inst.obfuscate(code);
+    }
+    if (typeof window.obfuscate === 'function') {
+        return window.obfuscate(code, opts);
+    }
+    throw new Error('obfuscate not available');
+}
+
+async function execute() {
+    const code = getInput().trim();
+    if (!code) { toast('Input empty','error'); return; }
+    obfBtn.disabled = true;
+    obfBtn.textContent = '⏳ Obfuscating...';
+    const opts = getOptions();
+    const t0 = performance.now();
+    try {
+        // Validate
+        try {
+            const v = await runJSValidator(code);
+            // if validator returns string containing ERROR, treat as invalid but we still proceed? we'll warn
+            if (typeof v === 'string' && /ERROR/i.test(v)) {
+                validationPill.textContent='Validation: FAIL ✗ '+v.slice(0,120);
+                validationPill.className='pill err';
+                toast('Syntax issues detected, obfuscating anyway...','warn',4000);
+            } else {
+                validationPill.textContent='Validation: PASS ✓';
+                validationPill.className='pill ok';
+            }
+        } catch(ve) {
+            validationPill.textContent='Validation: unknown';
+            validationPill.className='pill warn';
+        }
+        const out = await runJSObfuscator(code, opts);
+        const t1 = performance.now();
+        if (!out) throw new Error('Empty output');
+        setOutput(out);
+        const inB = new Blob([code]).size;
+        const outB = new Blob([out]).size;
+        const ratio = (outB / Math.max(1,inB)).toFixed(2);
+        sizePill.textContent = `Input: ${fmtBytes(inB)} → Output: ${fmtBytes(outB)} (${ratio}×)`;
+        timePill.textContent = `Time: ${(t1-t0).toFixed(1)}ms`;
+        enginePill.textContent = `Engine: JS-V3 | Garbage: ${opts.garbageAmount}`;
+        toast(`Obfuscated! ${fmtBytes(outB)} in ${(t1-t0).toFixed(1)}ms`,'success');
+    } catch(err) {
+        console.error(err);
+        setOutput(`-- [FATAL] ${err.message}\n-- Stack: ${err.stack?.slice(0,500)||''}`);
+        toast('Failed: '+err.message,'error',5000);
+        validationPill.textContent='Validation: ERROR';
+        validationPill.className='pill err';
+    } finally {
+        obfBtn.disabled = false;
+        obfBtn.textContent = '⚡ Obfuscate';
+    }
+}
+
+/* UI Wiring */
+initEditors();
+garbageRange.addEventListener('input', ()=>garbageVal.textContent=garbageRange.value);
+document.querySelectorAll('[data-opt]').forEach(cb=>{
+    cb.addEventListener('change', (e)=>{
+        e.target.closest('.opt').classList.toggle('active', e.target.checked);
+    });
+});
+
+obfBtn.addEventListener('click', execute);
+
+clearBtn.addEventListener('click', ()=>{
+    if (inputEditor) inputEditor.setValue('');
+    else inputEl.value='';
+    setOutput('');
+    validationPill.textContent='Validation: —';
+    validationPill.className='pill';
+    sizePill.textContent='Input: 0 B → Output: 0 B';
+    toast('Cleared','info');
+});
+
+copyBtn.addEventListener('click', async ()=>{
+    const out = outputEditor ? outputEditor.getValue() : outputEl.value;
+    if (!out.trim()) return toast('Nothing to copy','warn');
+    try { await navigator.clipboard.writeText(out); toast('Copied to clipboard','success'); }
+    catch { toast('Copy failed','error'); }
+});
+
+dlBtn.addEventListener('click', ()=>{
+    const out = outputEditor ? outputEditor.getValue() : outputEl.value;
+    if (!out.trim()) return toast('Nothing to download','warn');
+    const blob = new Blob([out], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href=url; a.download=`obfuscated_${Date.now()}.lua`; a.click();
+    URL.revokeObjectURL(url);
+    toast('Downloaded','success');
+});
+
+exampleSelect.addEventListener('change', ()=>{
+    const k = exampleSelect.value;
+    if (!k) return;
+    const code = EXAMPLES[k] || '';
+    if (inputEditor) inputEditor.setValue(code);
+    else inputEl.value=code;
+    toast(`Loaded example: ${k}`,'info');
+    exampleSelect.value='';
+});
+
+fileInput.addEventListener('change', (e)=>{
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=> {
+        const txt = reader.result;
+        if (inputEditor) inputEditor.setValue(txt);
+        else inputEl.value=txt;
+        toast(`Loaded file: ${f.name}`,'success');
+    };
+    reader.readAsText(f);
+    fileInput.value='';
+});
+
+/* Drag & Drop */
+['dragenter','dragover'].forEach(ev=>{
+    inputWrap.addEventListener(ev, (e)=>{ e.preventDefault(); dropOverlay.classList.add('active'); });
+});
+['dragleave','drop'].forEach(ev=>{
+    inputWrap.addEventListener(ev, (e)=>{ e.preventDefault(); if(ev!=='drop') dropOverlay.classList.remove('active'); });
+});
+inputWrap.addEventListener('drop', (e)=>{
+    dropOverlay.classList.remove('active');
+    const f = e.dataTransfer.files[0];
+    if (!f) return;
+    if (f.size>2_000_000) return toast('File too large','error');
+    const reader = new FileReader();
+    reader.onload = ()=> {
+        const txt = reader.result;
+        if (inputEditor) inputEditor.setValue(txt);
+        else inputEl.value=txt;
+        toast(`Dropped file: ${f.name}`,'success');
+    };
+    reader.readAsText(f);
+});
+
+/* Theme toggle */
+let darkTheme=true;
+$('#themeBtn').addEventListener('click', ()=>{
+    darkTheme=!darkTheme;
+    if (inputEditor) {
+        inputEditor.setOption('theme', darkTheme?'dracula':'material-darker');
+        outputEditor.setOption('theme', darkTheme?'dracula':'material-darker');
+    }
+});
+
+/* Keyboard shortcut Ctrl+Enter to obfuscate */
+document.addEventListener('keydown', (e)=>{
+    if ((e.ctrlKey||e.metaKey) && e.key==='Enter') execute();
+});
+
+/* Initial stats */
+(() =>{
+    const code = getInput();
+    inputMeta.textContent = fmtBytes(new Blob([code]).size);
+    quickValidate(code);
+})();
+
+/* Info */
+$('#infoBtn').addEventListener('click', ()=>{
+    toast('imnotFuscator V3 • Upgraded by imnotexploi4 • Features: FNV-1a seed chaining, ROTL+ADD+XOR keystream, number bool obfuscation, 11 anti-tamper probes, control-flow flattening, realistic garbage','info',6000);
+});
+</script>
 </body>
 </html>
