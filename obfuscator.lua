@@ -11,7 +11,7 @@ if not f then
 end
 local source = f:read("*a")
 f:close()
-math.randomseed(os.time())
+math.randomseed(os.time() + (os.clock() * 1000))
 
 local HEADER = [==[--!nocheck
 --[[
@@ -30,10 +30,35 @@ $$ |$$ | $$ | $$ |$$ |  $$ |\$$$$$$  | \$$$$  |$$ |   \$$$$$$  |$$$$$$$  |\$$$$$
 
 local ic = 0
 local bd = {}
+local prefix_cache = nil
+
+local function generate_prefix()
+  if prefix_cache then return prefix_cache end
+  local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  local patterns = {
+    function()
+      local c1 = chars:sub(math.random(1, 26), math.random(1, 26))
+      local c2 = chars:sub(math.random(27, 52), math.random(27, 52))
+      return c1 .. c2
+    end,
+    function()
+      local c1 = chars:sub(math.random(27, 52), math.random(27, 52))
+      return c1 .. "ll"
+    end,
+    function()
+      local c1 = chars:sub(math.random(1, 52), math.random(1, 52))
+      local c2 = chars:sub(math.random(1, 52), math.random(1, 52))
+      local c3 = chars:sub(math.random(1, 52), math.random(1, 52))
+      return c1 .. c2 .. c3
+    end
+  }
+  prefix_cache = patterns[math.random(1, #patterns)]()
+  return prefix_cache
+end
 
 local function ni()
   ic = ic + 1
-  return "imnot" .. ic
+  return generate_prefix() .. ic
 end
 
 local function mx(a, b)
@@ -278,32 +303,81 @@ local function rename_variables(code)
   return result
 end
 
+local function encode_number(num)
+  local r = math.random(0, 5)
+  if r == 0 then
+    local a = math.random(0, 1000)
+    local b = num - a
+    return "(" .. a .. "+" .. b .. ")"
+  elseif r == 1 then
+    local a = math.random(1, 100)
+    local b = num * a
+    return "(" .. b .. "/" .. a .. ")"
+  elseif r == 2 then
+    local a = math.random(0, 500)
+    local b = num + a
+    return "(" .. b .. "-" .. a .. ")"
+  elseif r == 3 then
+    local bits = {}
+    for i = 0, 7 do
+      if bit32 and bit32.band(num, bit32.lshift(1, i)) ~= 0 then
+        table.insert(bits, "(2^" .. i .. ")")
+      elseif not bit32 and (num % (2^(i+1))) >= (2^i) then
+        table.insert(bits, "(2^" .. i .. ")")
+      end
+    end
+    if #bits > 0 then
+      return "(" .. table.concat(bits, "+") .. ")"
+    else
+      return "0"
+    end
+  elseif r == 4 then
+    local a = math.random(1, 50)
+    local b = math.random(1, 50)
+    return "(" .. a .. "*" .. b .. "+" .. (num - a * b) .. ")"
+  else
+    return "(math.floor(" .. num .. "+0.5)-0.5+0.5)"
+  end
+end
+
 local function gg(count)
   local parts = {}
   for _ = 1, count do
     local v = ni()
-    local r = math.random(1, 8)
+    local r = math.random(1, 12)
     if r == 1 then
-      table.insert(parts, "local " .. v .. "=" .. math.random(0, 999999))
+      table.insert(parts, "local " .. v .. "=" .. encode_number(math.random(0, 999999)))
     elseif r == 2 then
-      table.insert(parts, "local " .. v .. "=(function()return " .. math.random(0, 99999) .. " end)()")
+      table.insert(parts, "local " .. v .. "=(function()return " .. encode_number(math.random(0, 99999)) .. " end)()")
     elseif r == 3 then
       local nums = {}
       for _ = 1, math.random(2, 4) do
-        table.insert(nums, math.random(0, 999))
+        table.insert(nums, encode_number(math.random(0, 999)))
       end
       table.insert(parts, "local " .. v .. "={" .. table.concat(nums, ",") .. "}")
     elseif r == 4 then
-      table.insert(parts, "local " .. v .. "=" .. math.random(0, 255) .. "+" .. math.random(0, 255))
+      table.insert(parts, "local " .. v .. "=" .. encode_number(math.random(0, 255)) .. "+" .. encode_number(math.random(0, 255)))
     elseif r == 5 then
-      table.insert(parts, "local " .. v .. "=(" .. math.random(1, 500) .. "*" .. math.random(1, 500) .. ")-" .. math.random(0, 9999))
+      table.insert(parts, "local " .. v .. "=(" .. encode_number(math.random(1, 500)) .. "*" .. encode_number(math.random(1, 500)) .. ")-" .. encode_number(math.random(0, 9999)))
     elseif r == 6 then
       local sq = math.random(2, 50)
-      table.insert(parts, "if((" .. sq .. "*" .. sq .. ")>=0)then local " .. v .. "=" .. math.random(0, 999) .. " end")
+      table.insert(parts, "if((" .. sq .. "*" .. sq .. ")>=0)then local " .. v .. "=" .. encode_number(math.random(0, 999)) .. " end")
     elseif r == 7 then
-      table.insert(parts, "local " .. v .. "=#(\"x\"):rep(" .. math.random(1, 20) .. ")")
+      table.insert(parts, "local " .. v .. "=#(\"x\"):rep(" .. encode_number(math.random(1, 20)) .. ")")
+    elseif r == 8 then
+      table.insert(parts, "local " .. v .. "=(function() if math.random()>=0 then return " .. encode_number(math.random(1, 100)) .. " else return " .. encode_number(math.random(1, 100)) .. " end end)()")
+    elseif r == 9 then
+      local fn = ni()
+      table.insert(parts, "local function " .. fn .. "()return " .. encode_number(math.random(0, 999)) .. " end;local " .. v .. "=" .. fn .. "()")
+    elseif r == 10 then
+      local t = ni()
+      table.insert(parts, "local " .. t .. "={};for " .. ni() .. "=" .. encode_number(1) .. "," .. encode_number(math.random(1, 5)) .. " do table.insert(" .. t .. "," .. encode_number(math.random(0, 999)) .. ")end;local " .. v .. "=#" .. t)
+    elseif r == 11 then
+      table.insert(parts, "local " .. v .. "=string.len(string.rep(\"a\"," .. encode_number(math.random(1, 50)) .. "))")
     else
-      table.insert(parts, "local " .. v .. "=(function() if math.random()>=0 then return " .. math.random(1, 100) .. " else return " .. math.random(1, 100) .. " end end)()")
+      local a = ni()
+      local b = ni()
+      table.insert(parts, "local " .. a .. "=" .. encode_number(math.random(0, 1000)) .. ";local " .. b .. "=" .. encode_number(math.random(0, 1000)) .. ";local " .. v .. "=" .. a .. "+" .. b)
     end
   end
   return table.concat(parts, ";")
@@ -320,11 +394,64 @@ local function minify(code)
   return table.concat(lines, " ")
 end
 
+local function flatten_control_flow(code)
+  local statements = {}
+  for stmt in code:gmatch("([^;]+)") do
+    local trimmed = stmt:match("^%s*(.-)%s*$")
+    if trimmed and #trimmed > 0 then
+      table.insert(statements, trimmed)
+    end
+  end
+  
+  if #statements < 3 then
+    return code
+  end
+  
+  local chunk_size = math.max(2, math.floor(#statements / math.min(5, math.ceil(#statements / 3))))
+  local chunks = {}
+  for i = 1, #statements, chunk_size do
+    local chunk = {}
+    for j = i, math.min(i + chunk_size - 1, #statements) do
+      table.insert(chunk, statements[j])
+    end
+    table.insert(chunks, table.concat(chunk, ";"))
+  end
+  
+  if #chunks < 2 then
+    return code
+  end
+  
+  local state_var = ni()
+  local shuffled_indices = {}
+  for i = 1, #chunks do
+    table.insert(shuffled_indices, i)
+  end
+  shuffle(shuffled_indices)
+  
+  local state_map = {}
+  for new_pos, orig_idx in ipairs(shuffled_indices) do
+    state_map[new_pos] = orig_idx
+  end
+  
+  local dispatcher = "local " .. state_var .. "=" .. encode_number(0) .. ";"
+  dispatcher = dispatcher .. "while " .. state_var .. "<" .. encode_number(#chunks) .. " do "
+  
+  local cases = {}
+  for i = 1, #chunks do
+    local orig_idx = state_map[i]
+    table.insert(cases, "if " .. state_var .. "==" .. encode_number(i) .. " then " .. chunks[orig_idx] .. ";" .. state_var .. "=" .. encode_number(i + 1))
+  end
+  
+  dispatcher = dispatcher .. table.concat(cases, " elseif ") .. " end end"
+  return dispatcher
+end
+
 local function obfuscate(src)
   ic = 0
   bd = {}
   gseed_name = nil
   gseed_value = 0
+  prefix_cache = nil
 
   local code = remove_comments(src)
   local cns, strings = extract_strings(code)
@@ -355,11 +482,17 @@ local function obfuscate(src)
   local bcco = bs("coroutine")
   local bcfn = bs("function")
   local bcc = bs("C")
+  local bcsm = bs("setmetatable")
+  local bcgm = bs("getmetatable")
+  local bcre = bs("rawequal")
   local tm = bs("LOOL imagine you use the 25ms and Threaded to skid this thing lel")
   local tm2 = bs("holy skid")
   local tm3 = bs("nice try skid, but this aint gonna work for you lmaooo")
+  local tm4 = bs("lmao nice try but the script said no")
+  local tm5 = bs("bro really thought he could debug this")
   local im = bs("integrity check failed successfully. this script has been modified.")
   local eem = bs("execute script error")
+  local vmm = bs("detected unauthorized analysis environment")
 
   local ev = ni()
   local fv = ni()
@@ -379,6 +512,9 @@ local function obfuscate(src)
   local a5 = ni()
   local a6 = ni()
   local a7 = ni()
+  local a8 = ni()
+  local a9 = ni()
+  local a10 = ni()
   local id = ni()
   local ifn = ni()
   local sc = ni()
@@ -386,7 +522,12 @@ local function obfuscate(src)
   local ga = gg(6)
   local gb = gg(8)
   local gc = gg(5)
+  local gd = gg(4)
   local bm = minify(ws)
+  
+  local use_flattening = #bm > 200 and math.random() > 0.3
+  local processed_body = use_flattening and flatten_control_flow(bm) or bm
+  
   local all_decls = table.concat(bd, ";")
 
   local checks = {
@@ -395,13 +536,16 @@ local function obfuscate(src)
     "local " .. a3 .. "=(function():boolean local imnot_dok:boolean,imnot_dlib:any=" .. spc .. "(function()return " .. ev .. "[" .. bcdb .. "]end);if imnot_dok and imnot_dlib then local imnot_ghok:boolean,imnot_gh:any=" .. spc .. "(function()return imnot_dlib[" .. bcgi .. "]end);if imnot_ghok and imnot_gh then local imnot_info:any=(imnot_gh::any)(1);if imnot_info and imnot_info.what==" .. bcc .. " then " .. se .. "(" .. tm3 .. ")end end end;return true end)()",
     "local " .. a4 .. "=setmetatable(" .. pv .. ",{[" .. bcni .. "]=function()" .. se .. "(" .. tm .. ")end,[" .. bcix .. "]=function(_imnot_self:any,imnot_key:any):any if imnot_key==" .. cv .. " then return true end;return nil end})",
     "local " .. a5 .. "=(function():boolean local imnot_cok:boolean,imnot_clib:any=" .. spc .. "(function()return " .. ev .. "[" .. bcco .. "]end);if imnot_cok and imnot_clib then local imnot_running:any=imnot_clib.running;if imnot_running then(imnot_running::any)()end end;return true end)()",
-    "local " .. a6 .. "=(function():boolean local imnot_c1ok:boolean,imnot_c1:any=" .. spc .. "(function()return os.clock()end);if not imnot_c1ok or type(imnot_c1)~=\"number\"then return true end;local imnot_acc=0;for imnot_ti=1,200000 do imnot_acc=imnot_acc+imnot_ti end;local imnot_c2ok:boolean,imnot_c2:any=" .. spc .. "(function()return os.clock()end);if imnot_c2ok and type(imnot_c2)==\"number\"then if(imnot_c2-imnot_c1)>0.35 then " .. se .. "(" .. tm3 .. ")end end;return true end)()",
-    "local " .. a7 .. "=(function():boolean local imnot_rwok:boolean,imnot_rwr:any=" .. spc .. "(function()return rawequal(1,1)end);if not imnot_rwok or imnot_rwr~=true then " .. se .. "(" .. tm2 .. ")end;local imnot_rgok:boolean,imnot_rgr:any=" .. spc .. "(function()local imnot_rt={};rawset(imnot_rt,1,1);return rawget(imnot_rt,1)end);if not imnot_rgok or imnot_rgr~=1 then " .. se .. "(" .. tm2 .. ")end;return true end)()"
+    "local " .. a6 .. "=(function():boolean local imnot_c1ok:boolean,imnot_c1:any=" .. spc .. '(function()return os.clock()end);if not imnot_c1ok or type(imnot_c1)~=\"number\"then return true end;local imnot_acc=0;for imnot_ti=1,200000 do imnot_acc=imnot_acc+imnot_ti end;local imnot_c2ok:boolean,imnot_c2:any=' .. spc .. '(function()return os.clock()end);if imnot_c2ok and type(imnot_c2)==\"number\"then if(imnot_c2-imnot_c1)>0.35 then ' .. se .. "(" .. tm3 .. ")end end;return true end)()",
+    "local " .. a7 .. "=(function():boolean local imnot_rwok:boolean,imnot_rwr:any=" .. spc .. "(function()return rawequal(1,1)end);if not imnot_rwok or imnot_rwr~=true then " .. se .. "(" .. tm2 .. ")end;local imnot_rgok:boolean,imnot_rgr:any=" .. spc .. "(function()local imnot_rt={};rawset(imnot_rt,1,1);return rawget(imnot_rt,1)end);if not imnot_rgok or imnot_rgr~=1 then " .. se .. "(" .. tm2 .. ")end;return true end)()",
+    "local " .. a8 .. "=(function():boolean local imnot_smok:boolean,imnot_sm:any=" .. spc .. "(function()return " .. ev .. "[" .. bcsm .. "]end);if not imnot_smok or " .. sty .. '(imnot_sm)~=\"function\"then ' .. se .. "(" .. tm4 .. ")end;local imnot_gmok:boolean,imnot_gm:any=" .. spc .. "(function()return " .. ev .. "[" .. bcgm .. "]end);if not imnot_gmok or " .. sty .. '(imnot_gm)~=\"function\"then ' .. se .. "(" .. tm4 .. ")end;return true end)()",
+    "local " .. a9 .. "=(function():boolean local imnot_depth=0;local imnot_func=function()imnot_depth=imnot_depth+1;if imnot_depth>1 then " .. se .. "(" .. tm5 .. ")end;imnot_depth=imnot_depth-1;return true end;return imnot_func()end)()",
+    "local " .. a10 .. "=(function():boolean local imnot_reok:boolean,imnot_re:any=" .. spc .. "(function()return " .. ev .. "[" .. bcre .. "]end);if imnot_reok and imnot_re then local imnot_t1={a=1};local imnot_t2={a=1};if(imnot_re::any)(imnot_t1,imnot_t2)then " .. se .. "(" .. vmm .. ")end end;return true end)()"
   }
   shuffle(checks)
   local checks_block = table.concat(checks, ";")
 
-  local check_names = shuffle({ a1, a2, a3, a5, a6, a7 })
+  local check_names = shuffle({ a1, a2, a3, a5, a6, a7, a8, a9, a10 })
   local sc_cond = "not " .. table.concat(check_names, " or not ")
 
   local raw = {
@@ -414,14 +558,15 @@ local function obfuscate(src)
     "local " .. sty .. "=typeof or type",
     ga,
     "local " .. pv .. "={}",
-    "local " .. cv .. "=" .. checksum,
+    "local " .. cv .. "=" .. encode_number(checksum),
     checks_block,
     gb,
-    "local " .. id .. "=" .. checksum,
+    "local " .. id .. "=" .. encode_number(checksum),
     "local " .. ifn .. "=function()if " .. id .. "~=" .. cv .. " then " .. se .. "(" .. im .. ")end end",
     ifn .. "()",
-    "local " .. fv .. "=function()" .. ifn .. "();" .. bm .. " end",
+    "local " .. fv .. "=function()" .. ifn .. "();" .. processed_body .. " end",
     gc,
+    gd,
     "local " .. sc .. "=(function():boolean if " .. sc_cond .. " then " .. se .. "(" .. tm .. ")end;return true end)()",
     "local " .. sv .. ":boolean," .. erv .. ":any=" .. spc .. "(" .. fv .. ")",
     "if not " .. sv .. " then local imnot_handler:any=" .. sw .. " or " .. sp .. " or function(...)end;(imnot_handler::any)(" .. eem .. ")end"

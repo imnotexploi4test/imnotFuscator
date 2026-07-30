@@ -27,6 +27,7 @@ class Obfuscator:
         self.bd = []
         self.gseed_name = None
         self.gseed_value = 0
+        self.prefix = self.generate_prefix()
         self.rw = {
             'and','break','do','else','elseif','end','false','for','function',
             'goto','if','in','local','nil','not','or','repeat','return','then',
@@ -47,9 +48,19 @@ class Obfuscator:
             'collectgarbage'
         }
 
+    def generate_prefix(self):
+        import string
+        chars = string.ascii_letters
+        patterns = [
+            lambda: chars[random.randint(0, 25)] + chars[random.randint(26, 51)],
+            lambda: chars[random.randint(26, 51)] + 'l' * 2,
+            lambda: chars[random.randint(0, 51)] + chars[random.randint(0, 51)] + chars[random.randint(0, 51)]
+        ]
+        return random.choice(patterns)()
+
     def ni(self):
         self.ic += 1
-        return f"imnot{self.ic}"
+        return f"{self.prefix}{self.ic}"
 
     def mx(self, a, b):
         r, bv = 0, 1
@@ -200,33 +211,104 @@ class Obfuscator:
             result = re.sub(pat, make_replacer(renamed), result)
         return result
 
+    def encode_number(self, num):
+        r = random.randint(0, 5)
+        if r == 0:
+            a = random.randint(0, 1000)
+            b = num - a
+            return f"({a}+{b})"
+        elif r == 1:
+            a = random.randint(1, 100)
+            b = num * a
+            return f"({b}/{a})"
+        elif r == 2:
+            a = random.randint(0, 500)
+            b = num + a
+            return f"({b}-{a})"
+        elif r == 3:
+            bits = []
+            for i in range(8):
+                if num & (1 << i):
+                    bits.append(f"(2^{i})")
+            return f"({' + '.join(bits)})" if bits else "0"
+        elif r == 4:
+            a = random.randint(1, 50)
+            b = random.randint(1, 50)
+            return f"({a}*{b}+{num - a * b})"
+        else:
+            return f"(math.floor({num}+0.5)-0.5+0.5)"
+
     def garbage(self, count):
         parts = []
         for _ in range(count):
             v = self.ni()
-            r = random.randint(1, 8)
+            r = random.randint(1, 12)
             if r == 1:
-                parts.append(f"local {v}={random.randint(0, 999999)}")
+                parts.append(f"local {v}={self.encode_number(random.randint(0, 999999))}")
             elif r == 2:
-                parts.append(f"local {v}=(function()return {random.randint(0, 99999)} end)()")
+                parts.append(f"local {v}=(function()return {self.encode_number(random.randint(0, 99999))} end)()")
             elif r == 3:
-                nums = ','.join(str(random.randint(0, 999)) for _ in range(random.randint(2, 4)))
+                nums = ','.join(self.encode_number(random.randint(0, 999)) for _ in range(random.randint(2, 4)))
                 parts.append(f"local {v}={{{nums}}}")
             elif r == 4:
-                parts.append(f"local {v}={random.randint(0, 255)}+{random.randint(0, 255)}")
+                parts.append(f"local {v}={self.encode_number(random.randint(0, 255))}+{self.encode_number(random.randint(0, 255))}")
             elif r == 5:
-                parts.append(f"local {v}=({random.randint(1, 500)}*{random.randint(1, 500)})-{random.randint(0, 9999)}")
+                parts.append(f"local {v}=({self.encode_number(random.randint(1, 500))}*{self.encode_number(random.randint(1, 500))})-{self.encode_number(random.randint(0, 9999))}")
             elif r == 6:
                 sq = random.randint(2, 50)
-                parts.append(f"if(({sq}*{sq})>=0)then local {v}={random.randint(0, 999)} end")
+                parts.append(f"if(({sq}*{sq})>=0)then local {v}={self.encode_number(random.randint(0, 999))} end")
             elif r == 7:
-                parts.append(f"local {v}=#(\"x\"):rep({random.randint(1, 20)})")
+                parts.append(f"local {v}=#(\"x\"):rep({self.encode_number(random.randint(1, 20))})")
+            elif r == 8:
+                parts.append(f"local {v}=(function() if math.random()>=0 then return {self.encode_number(random.randint(1, 100))} else return {self.encode_number(random.randint(1, 100))} end end)()")
+            elif r == 9:
+                fn = self.ni()
+                parts.append(f"local function {fn}()return {self.encode_number(random.randint(0, 999))} end;local {v}={fn}()")
+            elif r == 10:
+                t = self.ni()
+                parts.append(f"local {t}={{}};for {self.ni()}={self.encode_number(1)},{self.encode_number(random.randint(1, 5))} do table.insert({t},{self.encode_number(random.randint(0, 999))})end;local {v}=#{t}")
+            elif r == 11:
+                parts.append(f"local {v}=string.len(string.rep(\"a\",{self.encode_number(random.randint(1, 50))}))")
             else:
-                parts.append(f"local {v}=(function() if math.random()>=0 then return {random.randint(1, 100)} else return {random.randint(1, 100)} end end)()")
+                a = self.ni()
+                b = self.ni()
+                parts.append(f"local {a}={self.encode_number(random.randint(0, 1000))};local {b}={self.encode_number(random.randint(0, 1000))};local {v}={a}+{b}")
         return ';'.join(parts)
 
     def minify(self, code):
         return ' '.join(l.strip() for l in code.split('\n') if l.strip())
+
+    def flatten_control_flow(self, code):
+        statements = [s for s in code.split(';') if s.strip()]
+        if len(statements) < 3:
+            return code
+        
+        chunk_size = max(2, len(statements) // min(5, (len(statements) + 2) // 3))
+        chunks = []
+        for i in range(0, len(statements), chunk_size):
+            chunks.append(';'.join(statements[i:i + chunk_size]))
+        
+        if len(chunks) < 2:
+            return code
+        
+        state_var = self.ni()
+        shuffled_indices = list(range(len(chunks)))
+        random.shuffle(shuffled_indices)
+        
+        state_map = {}
+        for new_pos, orig_idx in enumerate(shuffled_indices):
+            state_map[new_pos] = orig_idx
+        
+        dispatcher = f"local {state_var}={self.encode_number(0)};"
+        dispatcher += f"while {state_var}<{self.encode_number(len(chunks))} do "
+        
+        cases = []
+        for i in range(len(chunks)):
+            orig_idx = state_map[i]
+            cases.append(f"if {state_var}=={self.encode_number(i)} then {chunks[orig_idx]};{state_var}={self.encode_number(i + 1)}")
+        
+        dispatcher += ' elseif '.join(cases) + " end end"
+        return dispatcher
 
     def obfuscate(self, source):
         self.ic = 0
@@ -262,20 +344,31 @@ class Obfuscator:
         bcco = self.bs("coroutine")
         bcfn = self.bs("function")
         bcc = self.bs("C")
+        bcsm = self.bs("setmetatable")
+        bcgm = self.bs("getmetatable")
+        bcre = self.bs("rawequal")
         tm = self.bs("LOOL imagine you use the 25ms and Threaded to skid this thing lel")
         tm2 = self.bs("holy skid")
         tm3 = self.bs("nice try skid, but this aint gonna work for you lmaooo")
+        tm4 = self.bs("lmao nice try but the script said no")
+        tm5 = self.bs("bro really thought he could debug this 💀")
         im = self.bs("integrity check failed successfully. this script has been modified.")
         eem = self.bs("execute script error")
+        vmm = self.bs("detected unauthorized analysis environment")
 
         ev, fv, sv, erv, pv, cvv, sp, sw, se, spc, sty = (self.ni() for _ in range(11))
-        a1, a2, a3, a4, a5, a6, a7 = (self.ni() for _ in range(7))
+        a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 = (self.ni() for _ in range(10))
         idd, ifn, sc = self.ni(), self.ni(), self.ni()
 
         ga = self.garbage(6)
         gb = self.garbage(8)
         gc = self.garbage(5)
+        gd = self.garbage(4)
         bm = self.minify(ws)
+        
+        use_flattening = len(bm) > 200 and random.random() > 0.3
+        processed_body = self.flatten_control_flow(bm) if use_flattening else bm
+        
         ad = ';'.join(self.bd)
         
         checks = [
@@ -285,22 +378,25 @@ class Obfuscator:
             f'local {a4}=setmetatable({pv},{{[{bcni}]=function(){se}({tm})end,[{bcix}]=function(_imnot_self:any,imnot_key:any):any if imnot_key=={cvv} then return true end;return nil end}})',
             f'local {a5}=(function():boolean local imnot_cok:boolean,imnot_clib:any={spc}(function()return {ev}[{bcco}]end);if imnot_cok and imnot_clib then local imnot_running:any=imnot_clib.running;if imnot_running then(imnot_running::any)()end end;return true end)()',
             f'local {a6}=(function():boolean local imnot_c1ok:boolean,imnot_c1:any={spc}(function()return os.clock()end);if not imnot_c1ok or type(imnot_c1)~="number"then return true end;local imnot_acc=0;for imnot_ti=1,200000 do imnot_acc=imnot_acc+imnot_ti end;local imnot_c2ok:boolean,imnot_c2:any={spc}(function()return os.clock()end);if imnot_c2ok and type(imnot_c2)=="number"then if(imnot_c2-imnot_c1)>0.35 then {se}({tm3})end end;return true end)()',
-            f'local {a7}=(function():boolean local imnot_rwok:boolean,imnot_rwr:any={spc}(function()return rawequal(1,1)end);if not imnot_rwok or imnot_rwr~=true then {se}({tm2})end;local imnot_rgok:boolean,imnot_rgr:any={spc}(function()local imnot_rt={{}};rawset(imnot_rt,1,1);return rawget(imnot_rt,1)end);if not imnot_rgok or imnot_rgr~=1 then {se}({tm2})end;return true end)()'
+            f'local {a7}=(function():boolean local imnot_rwok:boolean,imnot_rwr:any={spc}(function()return rawequal(1,1)end);if not imnot_rwok or imnot_rwr~=true then {se}({tm2})end;local imnot_rgok:boolean,imnot_rgr:any={spc}(function()local imnot_rt={{}};rawset(imnot_rt,1,1);return rawget(imnot_rt,1)end);if not imnot_rgok or imnot_rgr~=1 then {se}({tm2})end;return true end)()',
+            f'local {a8}=(function():boolean local imnot_smok:boolean,imnot_sm:any={spc}(function()return {ev}[{bcsm}]end);if not imnot_smok or {sty}(imnot_sm)~="function"then {se}({tm4})end;local imnot_gmok:boolean,imnot_gm:any={spc}(function()return {ev}[{bcgm}]end);if not imnot_gmok or {sty}(imnot_gm)~="function"then {se}({tm4})end;return true end)()',
+            f'local {a9}=(function():boolean local imnot_depth=0;local imnot_func=function()imnot_depth=imnot_depth+1;if imnot_depth>1 then {se}({tm5})end;imnot_depth=imnot_depth-1;return true end;return imnot_func()end)()',
+            f'local {a10}=(function():boolean local imnot_reok:boolean,imnot_re:any={spc}(function()return {ev}[{bcre}]end);if imnot_reok and imnot_re then local imnot_t1={{a=1}};local imnot_t2={{a=1}};if(imnot_re::any)(imnot_t1,imnot_t2)then {se}({vmm})end end;return true end)()'
         ]
         random.shuffle(checks)
         checks_block = ';'.join(checks)
         
-        check_names = [a1, a2, a3, a5, a6, a7]
+        check_names = [a1, a2, a3, a5, a6, a7, a8, a9, a10]
         random.shuffle(check_names)
         sc_cond = "not " + " or not ".join(check_names)
 
         raw = [
             ad, f"local {ev}:any=_G", f"local {sp}=print", f"local {sw}=warn", f"local {se}=error",
             f"local {spc}=pcall", f"local {sty}=typeof or type", ga,
-            f"local {pv}={{}}", f"local {cvv}={checksum}",
-            checks_block, gb, f"local {idd}={checksum}",
+            f"local {pv}={{}}", f"local {cvv}={self.encode_number(checksum)}",
+            checks_block, gb, f"local {idd}={self.encode_number(checksum)}",
             f"local {ifn}=function()if {idd}~={cvv} then {se}({im})end end", f"{ifn}()",
-            f"local {fv}=function(){ifn}();{bm} end", gc,
+            f"local {fv}=function(){ifn}();{processed_body} end", gc, gd,
             f"local {sc}=(function():boolean if {sc_cond} then {se}({tm})end;return true end)()",
             f"local {sv}:boolean,{erv}:any={spc}({fv})",
             f"if not {sv} then local imnot_handler:any={sw} or {sp} or function(...)end;(imnot_handler::any)({eem})end"

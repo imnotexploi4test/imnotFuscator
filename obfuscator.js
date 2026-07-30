@@ -15,6 +15,7 @@ class LuaObfuscator {
     this.bd = [];
     this.gseed_name = null;
     this.gseed_value = 0;
+    this.prefix = this.generatePrefix();
     this.rw = new Set([
       "and","break","do","else","elseif","end","false","for","function",
       "goto","if","in","local","nil","not","or","repeat","return","then",
@@ -44,9 +45,30 @@ class LuaObfuscator {
     ]);
   }
 
+  generatePrefix() {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const patterns = [
+      () => {
+        const c1 = chars[Math.floor(Math.random() * 26)];
+        const c2 = chars[Math.floor(Math.random() * 26) + 26];
+        return `${c1}${c2}`;
+      },
+      () => {
+        const c1 = chars[Math.floor(Math.random() * 26) + 26];
+        return `${c1}l`.repeat(2).slice(0, 3);
+      },
+      () => {
+        const c1 = chars[Math.floor(Math.random() * 52)];
+        const c2 = chars[Math.floor(Math.random() * 52)];
+        return `${c1}${c2}${chars[Math.floor(Math.random() * 52)]}`;
+      }
+    ];
+    return patterns[Math.floor(Math.random() * patterns.length)]();
+  }
+
   ni() {
     this.ic++;
-    return `imnot${this.ic}`;
+    return `${this.prefix}${this.ic}`;
   }
 
   rl(v, r) {
@@ -274,29 +296,70 @@ class LuaObfuscator {
     return result;
   }
 
+  encodeNumber(num) {
+    const r = Math.floor(Math.random() * 6);
+    if (r === 0) {
+      const a = Math.floor(Math.random() * 1000);
+      const b = num - a;
+      return `(${a}+${b})`;
+    } else if (r === 1) {
+      const a = Math.floor(Math.random() * 100) + 1;
+      const b = num * a;
+      return `(${b}/${a})`;
+    } else if (r === 2) {
+      const a = Math.floor(Math.random() * 500);
+      const b = num + a;
+      return `(${b}-${a})`;
+    } else if (r === 3) {
+      const bits = [];
+      for (let i = 0; i < 8; i++) {
+        if (num & (1 << i)) bits.push(`(2^${i})`);
+      }
+      return bits.length > 0 ? `(${bits.join("+")})` : "0";
+    } else if (r === 4) {
+      const a = Math.floor(Math.random() * 50) + 1;
+      const b = Math.floor(Math.random() * 50) + 1;
+      return `(${a}*${b}+${num - a * b})`;
+    } else {
+      return `(math.floor(${num}+0.5)-0.5+0.5)`;
+    }
+  }
+
   garbage(count) {
     const parts = [];
     for (let i = 0; i < count; i++) {
       const vn = this.ni();
-      const r = Math.floor(Math.random() * 8) + 1;
+      const r = Math.floor(Math.random() * 12) + 1;
       if (r === 1) {
-        parts.push(`local ${vn}=${Math.floor(Math.random() * 999999)}`);
+        parts.push(`local ${vn}=${this.encodeNumber(Math.floor(Math.random() * 999999))}`);
       } else if (r === 2) {
-        parts.push(`local ${vn}=(function()return ${Math.floor(Math.random() * 99999)} end)()`);
+        parts.push(`local ${vn}=(function()return ${this.encodeNumber(Math.floor(Math.random() * 99999))} end)()`);
       } else if (r === 3) {
-        const nums = Array.from({ length: Math.floor(Math.random() * 3) + 2 }, () => Math.floor(Math.random() * 999));
+        const nums = Array.from({ length: Math.floor(Math.random() * 3) + 2 }, () => this.encodeNumber(Math.floor(Math.random() * 999)));
         parts.push(`local ${vn}={${nums.join(",")}}`);
       } else if (r === 4) {
-        parts.push(`local ${vn}=${Math.floor(Math.random() * 255)}+${Math.floor(Math.random() * 255)}`);
+        parts.push(`local ${vn}=${this.encodeNumber(Math.floor(Math.random() * 255))}+${this.encodeNumber(Math.floor(Math.random() * 255))}`);
       } else if (r === 5) {
-        parts.push(`local ${vn}=(${Math.floor(Math.random() * 500)}*${Math.floor(Math.random() * 500)})-${Math.floor(Math.random() * 9999)}`);
+        parts.push(`local ${vn}=(${this.encodeNumber(Math.floor(Math.random() * 500))}*${this.encodeNumber(Math.floor(Math.random() * 500))})-${this.encodeNumber(Math.floor(Math.random() * 9999))}`);
       } else if (r === 6) {
         const sq = Math.floor(Math.random() * 49) + 2;
-        parts.push(`if((${sq}*${sq})>=0)then local ${vn}=${Math.floor(Math.random() * 999)} end`);
+        parts.push(`if((${sq}*${sq})>=0)then local ${vn}=${this.encodeNumber(Math.floor(Math.random() * 999))} end`);
       } else if (r === 7) {
-        parts.push(`local ${vn}=#("x"):rep(${Math.floor(Math.random() * 20) + 1})`);
+        parts.push(`local ${vn}=#("x"):rep(${this.encodeNumber(Math.floor(Math.random() * 20) + 1)})`);
+      } else if (r === 8) {
+        parts.push(`local ${vn}=(function() if math.random()>=0 then return ${this.encodeNumber(Math.floor(Math.random() * 100) + 1)} else return ${this.encodeNumber(Math.floor(Math.random() * 100) + 1)} end end)()`);
+      } else if (r === 9) {
+        const fn = this.ni();
+        parts.push(`local function ${fn}()return ${this.encodeNumber(Math.floor(Math.random() * 999))} end;local ${vn}=${fn}()`);
+      } else if (r === 10) {
+        const t = this.ni();
+        parts.push(`local ${t}={};for ${this.ni()}=${this.encodeNumber(1)},${this.encodeNumber(Math.floor(Math.random() * 5) + 1)} do table.insert(${t},${this.encodeNumber(Math.floor(Math.random() * 999))})end;local ${vn}=#${t}`);
+      } else if (r === 11) {
+        parts.push(`local ${vn}=string.len(string.rep("a",${this.encodeNumber(Math.floor(Math.random() * 50) + 1)}))`);
       } else {
-        parts.push(`local ${vn}=(function() if math.random()>=0 then return ${Math.floor(Math.random() * 100) + 1} else return ${Math.floor(Math.random() * 100) + 1} end end)()`);
+        const a = this.ni();
+        const b = this.ni();
+        parts.push(`local ${a}=${this.encodeNumber(Math.floor(Math.random() * 1000))};local ${b}=${this.encodeNumber(Math.floor(Math.random() * 1000))};local ${vn}=${a}+${b}`);
       }
     }
     return parts.join(";");
@@ -304,6 +367,43 @@ class LuaObfuscator {
 
   esc(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  flattenControlFlow(code) {
+    const statements = code.split(';').filter(s => s.trim().length > 0);
+    if (statements.length < 3) return code;
+    
+    const chunkSize = Math.max(2, Math.floor(statements.length / Math.min(5, Math.ceil(statements.length / 3))));
+    const chunks = [];
+    for (let i = 0; i < statements.length; i += chunkSize) {
+      chunks.push(statements.slice(i, i + chunkSize).join(';'));
+    }
+    
+    if (chunks.length < 2) return code;
+    
+    const stateVar = this.ni();
+    const loopVar = this.ni();
+    const chunkVars = chunks.map(() => this.ni());
+    
+    const shuffledIndices = Array.from({length: chunks.length}, (_, i) => i);
+    shuffledIndices.sort(() => Math.random() - 0.5);
+    
+    const stateMap = {};
+    shuffledIndices.forEach((origIdx, newPos) => {
+      stateMap[newPos] = origIdx;
+    });
+    
+    let dispatcher = `local ${stateVar}=${this.encodeNumber(0)};`;
+    dispatcher += `while ${stateVar}<${this.encodeNumber(chunks.length)} do `;
+    
+    const cases = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const origIdx = stateMap[i];
+      cases.push(`if ${stateVar}==${this.encodeNumber(i)} then ${chunks[origIdx]};${stateVar}=${this.encodeNumber(i + 1)}`);
+    }
+    
+    dispatcher += cases.join(' elseif ') + ` end end`;
+    return dispatcher;
   }
 
   build(body) {
@@ -320,12 +420,18 @@ class LuaObfuscator {
     const bcCoroutine = this.bs("coroutine");
     const bcFunction = this.bs("function");
     const bcC = this.bs("C");
+    const bcSetmetatable = this.bs("setmetatable");
+    const bcGetmetatable = this.bs("getmetatable");
+    const bcRawequal = this.bs("rawequal");
     
     const tamperMsg = this.bs("LOOL imagine you use the 25ms and Threaded to skid this thing lel");
     const tamperMsg2 = this.bs("holy skid");
     const tamperMsg3 = this.bs("nice try skid, but this aint gonna work for you lmaooo");
+    const tamperMsg4 = this.bs("lmao nice try but the script said no");
+    const tamperMsg5 = this.bs("bro really thought he could debug this 💀");
     const integrityMsg = this.bs("integrity check failed successfully. this script has been modified.");
     const execErrMsg = this.bs("execute script error");
+    const vmMsg = this.bs("detected unauthorized analysis environment");
 
     const envVar = this.ni();
     const funcVar = this.ni();
@@ -351,6 +457,9 @@ class LuaObfuscator {
     const at5 = this.ni();
     const at6 = this.ni();
     const at7 = this.ni();
+    const at8 = this.ni();
+    const at9 = this.ni();
+    const at10 = this.ni();
     const intData = this.ni();
     const intFunc = this.ni();
     const selfCheck = this.ni();
@@ -358,7 +467,12 @@ class LuaObfuscator {
     const ga = this.garbage(6);
     const gb = this.garbage(8);
     const gc = this.garbage(5);
+    const gd = this.garbage(4);
     const bodyMin = body.split("\n").map((l) => l.trim()).filter((l) => l.length > 0).join(" ");
+    
+    const useFlattening = body.length > 200 && Math.random() > 0.3;
+    const processedBody = useFlattening ? this.flattenControlFlow(bodyMin) : bodyMin;
+    
     const allDecls = this.bd.join(";");
 
     const checks = [
@@ -368,12 +482,15 @@ class LuaObfuscator {
       `local ${at4}=setmetatable(${protVar},{[${bcNewindex}]=function()${safeError}(${tamperMsg})end,[${bcIndex}]=function(_imnot_self:any,imnot_key:any):any if imnot_key==${checksumVar} then return true end;return nil end})`,
       `local ${at5}=(function():boolean local imnot_cok:boolean,imnot_clib:any=${safePcall}(function()return ${envVar}[${bcCoroutine}]end);if imnot_cok and imnot_clib then local imnot_running:any=imnot_clib.running;if imnot_running then(imnot_running::any)()end end;return true end)()`,
       `local ${at6}=(function():boolean local imnot_c1ok:boolean,imnot_c1:any=${safePcall}(function()return os.clock()end);if not imnot_c1ok or type(imnot_c1)~="number"then return true end;local imnot_acc=0;for imnot_ti=1,200000 do imnot_acc=imnot_acc+imnot_ti end;local imnot_c2ok:boolean,imnot_c2:any=${safePcall}(function()return os.clock()end);if imnot_c2ok and type(imnot_c2)=="number"then if(imnot_c2-imnot_c1)>0.35 then ${safeError}(${tamperMsg3})end end;return true end)()`,
-      `local ${at7}=(function():boolean local imnot_rwok:boolean,imnot_rwr:any=${safePcall}(function()return rawequal(1,1)end);if not imnot_rwok or imnot_rwr~=true then ${safeError}(${tamperMsg2})end;local imnot_rgok:boolean,imnot_rgr:any=${safePcall}(function()local imnot_rt={};rawset(imnot_rt,1,1);return rawget(imnot_rt,1)end);if not imnot_rgok or imnot_rgr~=1 then ${safeError}(${tamperMsg2})end;return true end)()`
+      `local ${at7}=(function():boolean local imnot_rwok:boolean,imnot_rwr:any=${safePcall}(function()return rawequal(1,1)end);if not imnot_rwok or imnot_rwr~=true then ${safeError}(${tamperMsg2})end;local imnot_rgok:boolean,imnot_rgr:any=${safePcall}(function()local imnot_rt={};rawset(imnot_rt,1,1);return rawget(imnot_rt,1)end);if not imnot_rgok or imnot_rgr~=1 then ${safeError}(${tamperMsg2})end;return true end)()`,
+      `local ${at8}=(function():boolean local imnot_smok:boolean,imnot_sm:any=${safePcall}(function()return ${envVar}[${bcSetmetatable}]end);if not imnot_smok or ${safeType}(imnot_sm)~="function"then ${safeError}(${tamperMsg4})end;local imnot_gmok:boolean,imnot_gm:any=${safePcall}(function()return ${envVar}[${bcGetmetatable}]end);if not imnot_gmok or ${safeType}(imnot_gm)~="function"then ${safeError}(${tamperMsg4})end;return true end)()`,
+      `local ${at9}=(function():boolean local imnot_depth=0;local imnot_func=function()imnot_depth=imnot_depth+1;if imnot_depth>1 then ${safeError}(${tamperMsg5})end;imnot_depth=imnot_depth-1;return true end;return imnot_func()end)()`,
+      `local ${at10}=(function():boolean local imnot_reok:boolean,imnot_re:any=${safePcall}(function()return ${envVar}[${bcRawequal}]end);if imnot_reok and imnot_re then local imnot_t1={a=1};local imnot_t2={a=1};if(imnot_re::any)(imnot_t1,imnot_t2)then ${safeError}(${vmMsg})end end;return true end)()`
     ];
     checks.sort(() => Math.random() - 0.5);
     const checksBlock = checks.join(";");
 
-    const checkNames = [at1, at2, at3, at5, at6, at7];
+    const checkNames = [at1, at2, at3, at5, at6, at7, at8, at9, at10];
     checkNames.sort(() => Math.random() - 0.5);
     const scCond = "not " + checkNames.join(" or not ");
 
@@ -387,14 +504,15 @@ class LuaObfuscator {
       `local ${safeType}=typeof or type`,
       ga,
       `local ${protVar}={}`,
-      `local ${checksumVar}=${checksum}`,
+      `local ${checksumVar}=${this.encodeNumber(checksum)}`,
       checksBlock,
       gb,
-      `local ${intData}=${checksum}`,
+      `local ${intData}=${this.encodeNumber(checksum)}`,
       `local ${intFunc}=function()if ${intData}~=${checksumVar} then ${safeError}(${integrityMsg})end end`,
       `${intFunc}()`,
-      `local ${funcVar}=function()${intFunc}();${bodyMin} end`,
+      `local ${funcVar}=function()${intFunc}();${processedBody} end`,
       gc,
+      gd,
       `local ${selfCheck}=(function():boolean if ${scCond} then ${safeError}(${tamperMsg})end;return true end)()`,
       `local ${statusVar}:boolean,${errVar}:any=${safePcall}(${funcVar})`,
       `if not ${statusVar} then local imnot_handler:any=${safeWarn} or ${safePrint} or function(...)end;(imnot_handler::any)(${execErrMsg})end`
