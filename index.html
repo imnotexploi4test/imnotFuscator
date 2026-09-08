@@ -140,21 +140,29 @@ function highlightLua(src){
       out+="<span class=com>"+escapeHtml(src.slice(i,j))+"</span>"; i=j; continue;
     }
     const c=src[i];
-    if(c==="\""||c==="'"){
-      const q=c; let j=i+1;
-      while(j<src.length){if(src[j]==="\\"){j+=2;continue} if(src[j]===q){j++;break} j++;}
-      out+="<span class=str>"+escapeHtml(src.slice(i,j))+"</span>";i=j;continue;
-    }
-    if(c==="[" && /^\\[=*\[/.test(src.slice(i))){
-      const m=src.slice(i).match(/^\\[(=*)\\[/); const close="]"+m[1]+"]"; const j0=i+m[0].length; const k=src.indexOf(close,j0);
-      if(k>=0){const j=k+close.length;out+="<span class=str>"+escapeHtml(src.slice(i,j))+"</span>";i=j;continue;}
-    }
-    const id=src.slice(i).match(/^[A-Za-z_][A-Za-z0-9_]*/);
-    if(id){
-      const v=id[0], cls=KW.has(v)?"kw":BUILTIN.has(v)?"builtin":"";
-      out+=cls?`<span class=${cls}>${escapeHtml(v)}</span>`:escapeHtml(v);i+=v.length;continue;
-    }
-    const n=src.slice(i).match(/^(?:0[xX][0-9A-Fa-f]+|(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?)/);
+    if(c==="[" && /^\[=*\[/.test(src.slice(i))){
+  const m=src.slice(i).match(/^\[(=*)\[/);
+  const close="]"+m[1]+"]";
+  const j0=i+m[0].length;
+  const k=src.indexOf(close,j0);
+
+  if(k>=0){
+    const j=k+close.length;
+    out+="<span class=str>"+escapeHtml(src.slice(i,j))+"</span>";
+    i=j;
+    continue;
+  }
+}
+
+const id=src.slice(i).match(/^[A-Za-z_][A-Za-z0-9_]*/);
+if(id){
+  const v=id[0], cls=KW.has(v)?"kw":BUILTIN.has(v)?"builtin":"";
+  out+=cls?`<span class=${cls}>${escapeHtml(v)}</span>`:escapeHtml(v);
+  i+=v.length;
+  continue;
+}
+
+const n=src.slice(i).match(/^(?:0[xX][0-9A-Fa-f]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)/);
     if(n){out+="<span class=num>"+escapeHtml(n[0])+"</span>";i+=n[0].length;continue;}
     out+=escapeHtml(c);i++;
   }
