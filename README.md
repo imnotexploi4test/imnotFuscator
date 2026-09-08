@@ -4,7 +4,7 @@ A multi-language Lua/Luau obfuscator and validator suite focused on structural o
 
 ## What changed in v9
 
-v8 keeps the existing project structure, original headers, and existing anti-tamper messages. The normal build still uses one fixed protection pipeline. There are no user-selectable obfuscation levels.
+v9 keeps the existing project structure, original headers, and existing anti-tamper messages. The normal build still uses one fixed protection pipeline. There are no user-selectable obfuscation levels.
 
 ### Obfuscator upgrades
 
@@ -24,7 +24,7 @@ v8 keeps the existing project structure, original headers, and existing anti-tam
 
 ### Important limitation
 
-No source-code obfuscator can make code mathematically impossible to recover once the protected program is executed. Runtime values can still be observed by instrumentation, API hooks, interpreter tracing, or other dynamic analysis. v8 is designed to make straightforward static pattern matching and simple decoder extraction more expensive, not to provide an absolute anti-reversing guarantee.
+No source-code obfuscator can make code mathematically impossible to recover once the protected program is executed. Runtime values can still be observed by instrumentation, API hooks, interpreter tracing, or other dynamic analysis. v9 is designed to make straightforward static pattern matching and simple decoder extraction more expensive, not to provide an absolute anti-reversing guarantee.
 
 ## Supported targets
 
@@ -75,7 +75,7 @@ lua obfuscator.lua input.lua output.lua --target luajit
 lua obfuscator.lua input.lua output.lua --target luau
 ```
 
-The Lua implementation follows the same v8 string protection design as the Python implementation: chained byte state, polymorphic inverse expressions, payload masking, payload permutation, and integrity metadata.
+The Lua implementation follows the same v9 string protection design as the Python implementation: chained byte state, polymorphic inverse expressions, payload masking, payload permutation, and integrity metadata.
 
 ### JavaScript
 
@@ -163,17 +163,70 @@ They were not renamed or removed.
 | `validator.lua` | Lua validator |
 | `logger.js` | Existing project logger |
 
+## Quick CLI examples
+
+### Luau + Roblox Exploit
+
+```bash
+lua obfuscator.lua test.lua tested.lua.txt --target luau --type exploit
+```
+
+A successful run prints `OK`. The output can then be checked with the validator using the same target/type pair:
+
+```bash
+lua validator.lua tested.lua.txt --target luau --type exploit
+```
+
+### Roblox Studio
+
+```bash
+lua obfuscator.lua test.lua tested.lua --target luau --type studio
+```
+
+### Roblox Require
+
+```bash
+lua obfuscator.lua test.lua tested.lua --target luau --type require
+```
+
+In `require` mode, numeric module IDs in direct `require(...)` expressions are transformed automatically. For example:
+
+```lua
+require(12345678)
+require(12345678):Fire("playerexample")
+require(12345678).lescript("playerexample", arg1, arg2, arg3)
+```
+
+The module ID is protected as part of the `require(...)` expression while the surrounding call chain is preserved. This is static-extraction resistance, not a guarantee against runtime hooks that can observe the evaluated ID.
+
+## Benchmark example
+
+The following Prometheus benchmark is an example run, not a universal performance guarantee. Runtime depends on the device, Lua runtime, and workload.
+
+| Benchmark | Iterations | Time (s) |
+|---|---:|---:|
+| arithmetic loop | 500000 | 0.015889 |
+| function calls | 400000 | 0.044435 |
+| table create/insert | 600000 | 0.244628 |
+| table iteration | 6000 | 0.703367 |
+| string concat | 40000 | 0.628106 |
+| closure creation | 300000 | 0.129501 |
+| metatable index | 200000 | 0.015493 |
+| **total** | | **1.781419** |
+
+Run your own benchmark before comparing builds.
+
 ## Testing
 
 The repository includes a small regression test suite under `tests/`.
 
-The current build has been syntax-checked for Python and JavaScript. Generated Python, JavaScript, and Lua obfuscated samples were executed successfully with the available `luatex --luaonly` runtime smoke test, and the generated files passed the Python validator for all documented targets.
+The current build has been syntax-checked for Python and JavaScript. Generated Python, JavaScript, and Lua obfuscated samples were exercised with the available `luatex --luaonly` runtime smoke test, and the generated files passed the Python validator for the documented targets. The repository also includes a benchmark example for the Lua runtime.
 
 A native Lua 5.1, 5.2, 5.3, 5.4, 5.5, LuaJIT, or Luau runtime was not available in the build environment, so those target runtimes are not claimed to have been directly executed here.
 
 ## Design direction
 
-v8 follows public research trends around stateful constant protection, control-flow and dispatcher polymorphism, compiler-aware transformations, and VM-style analysis resistance. It does not copy proprietary implementation code from another commercial obfuscator.
+v9 follows public research trends around stateful constant protection, control-flow and dispatcher polymorphism, compiler-aware transformations, and VM-style analysis resistance. It does not copy proprietary implementation code from another commercial obfuscator.
 
 ## Author
 
